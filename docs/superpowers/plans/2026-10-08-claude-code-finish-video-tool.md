@@ -140,11 +140,11 @@ pub fn build_args(
 
 **Files:** TextPreview.svelte, components/TextPreview.test.ts, engine.rs, vite.config.js.
 
-- [ ] Test style/text không đổi nhưng w/h 1280x720 ->720x1280: drawOverlay nhận dimensions mới. Promise font cũ resolve sau promise mới: draw cũ không ghi canvas mới.
-- [ ] RED rồi capture w/h đồng bộ trong effect; cleanup/revision bỏ stale draws và redraw sau DOM dimensions cập nhật.
-- [ ] Test Start thiếu ffprobe trả lỗi tiếng Việt trước Submit; check cả ffmpeg/ffprobe, giữ PATH fallback.
-- [ ] Native watcher EBUSY: ignore src-tauri/target trong Vite server.watch nếu tái hiện; smoke dev startup. Polling workaround vẫn được ghi handoff.
-- [ ] Tests/build/review; commit `fix: refresh resized previews and validate media tools`.
+- [x] Test style/text không đổi nhưng w/h 1280x720 ->720x1280: drawOverlay nhận dimensions mới. Promise font cũ resolve sau promise mới: draw cũ không ghi canvas mới.
+- [x] RED rồi capture w/h đồng bộ trong effect; cleanup/revision bỏ stale draws và redraw sau DOM dimensions cập nhật.
+- [x] Test Start thiếu ffprobe trả lỗi tiếng Việt trước Submit; check cả ffmpeg/ffprobe, giữ PATH fallback.
+- [x] Native watcher EBUSY: ignore src-tauri/target trong Vite server.watch nếu tái hiện; smoke dev startup. Polling workaround vẫn được ghi handoff.
+- [x] Tests/build/review; commit `fix: refresh resized previews and validate media tools`.
 
 ### Task 6: Scoped re-review và toàn bộ verification
 
