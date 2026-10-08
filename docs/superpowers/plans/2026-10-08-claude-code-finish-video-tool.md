@@ -171,8 +171,8 @@ git diff --check
 
 **Files:** scratch live-fixture đã có; docs/reviews/2026-10-08-live-run.md.
 
-- [ ] Khi Task6 đạt, đề nghị người dùng Reload extension: lần trước diễn ra trước repair 3e27fa8; manifest version một mình không chứng minh worker mới đã nạp.
-- [ ] Khởi động từ repo:
+- [x] Khi Task6 đạt, đề nghị người dùng Reload extension: lần trước diễn ra trước repair 3e27fa8; manifest version một mình không chứng minh worker mới đã nạp.
+- [x] Khởi động từ repo:
 
 ```powershell
 $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS='--remote-debugging-port=9333'
@@ -180,10 +180,10 @@ $env:CHOKIDAR_USEPOLLING='true'
 cargo tauri dev
 ```
 
-- [ ] Mở live-fixture 3 ảnh, kiểm tra prompt camera slowly pushes in, gentle motion; text row1 Tập1; music folder; 720p 16:9 concurrency3 maxRetries0. Đọc history trước nếu đã có job/raw, không reset để gửi trùng.
-- [ ] Xác nhận connected v1.1.10.0 đúng ID; nói tối đa 3 lượt Veo. Bấm UI Bắt đầu đúng một lần để render overlays, hoặc nhờ người dùng bấm.
-- [ ] Lỗi => dừng/debug, không auto-retry thêm quota. Disconnect => job.query recovery, không tạo job mới bằng tay.
-- [ ] Khi 3 rows Done, kiểm tra map Output, audio/duration/resolution và frame đầu. Lệnh dùng path thật từ project:
+- [x] Mở live-fixture 3 ảnh, kiểm tra prompt camera slowly pushes in, gentle motion; text row1 Tập1; music folder; 720p 16:9 concurrency3 maxRetries0. Đọc history trước nếu đã có job/raw, không reset để gửi trùng.
+- [x] Xác nhận connected v1.1.10.0 đúng ID; nói tối đa 3 lượt Veo. Bấm UI Bắt đầu đúng một lần để render overlays, hoặc nhờ người dùng bấm.
+- [x] Lỗi => dừng/debug, không auto-retry thêm quota. Disconnect => job.query recovery, không tạo job mới bằng tay.
+- [x] Khi 3 rows Done, kiểm tra map Output, audio/duration/resolution và frame đầu. Lệnh dùng path thật từ project:
 
 ```powershell
 $fixture = Join-Path (Get-Location) '.superpowers/sdd/2026-10-08-1click-video-tool/live-fixture'
@@ -196,8 +196,8 @@ foreach ($row in $project.rows) {
 }
 ```
 
-- [ ] Extract raw frame đầu nữa để đối chiếu source; inspect output001 thấy Tập1, nhạc/audio đúng. Ghi paths/screenshots/evidence vào report. Chỉ claim live verified khi đủ; quota/login/site block thì ghi trạng thái thực tế.
-- [ ] Commit report live run, không push.
+- [x] Extract raw frame đầu nữa để đối chiếu source; inspect output001 thấy Tập1, nhạc/audio đúng. Ghi paths/screenshots/evidence vào report. Chỉ claim live verified khi đủ; quota/login/site block thì ghi trạng thái thực tế.
+- [x] Commit report live run, không push.
 
 ### Task 8: Bộ cài cuối và bàn giao
 

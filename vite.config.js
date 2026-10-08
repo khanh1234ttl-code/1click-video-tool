@@ -9,7 +9,8 @@ export default defineConfig(({ mode }) => ({
     port: 1420,
     strictPort: true,
     // cargo rewrites DLLs under src-tauri/target while the app runs; watching them caused EBUSY.
-    watch: { ignored: ["**/src-tauri/**"] },
+    // Scratch projects under .superpowers get videos written by the app itself (same EBUSY, Vite crash).
+    watch: { ignored: ["**/src-tauri/**", "**/.superpowers/**"] },
   },
   resolve: { conditions: ["browser"] },
   test: { include: ["src/**/*.test.ts"], environment: "happy-dom" },
