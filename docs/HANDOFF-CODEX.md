@@ -1,5 +1,12 @@
 # Handoff to Codex — finish the 1Click Video Tool
 
+> **Latest checkpoint (2026-10-08):** Codex continued this handoff, completed Tasks 11–12,
+> built an initial installer and reviewed the branch. The user then requested a commit and
+> a plan for Claude Code. Read `HANDOFF-CLAUDE.md` and
+> `superpowers/plans/2026-10-08-claude-code-finish-video-tool.md` next. Commit `f23202f`
+> preserves an unfinished Rust lifecycle refactor; it currently does not compile. The status
+> below records the earlier Claude-to-Codex handoff and is historical, not current.
+
 Written 2026-10-08 by Claude Code, which implemented Tasks 1–10 and most of Task 11 and then
 handed off at the user's request. Read this file fully before touching code.
 
