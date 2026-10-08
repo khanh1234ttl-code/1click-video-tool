@@ -27,6 +27,7 @@
   $effect(() => { const dir = project?.imageDir; if (dir !== shownProject) { shownProject = dir; selected = 0; } });
   const failed = $derived(project?.rows.filter((r) => r.status.state === "failed").map((r) => r.stt) ?? []);
   const generated = $derived(project?.rows.filter((r) => r.rawVideo).length ?? 0);
+  const waiting = $derived(project?.rows.filter((r) => r.status.state === "pending").length ?? 0);
   const name = (p: string) => p.split(/[\\/]/).pop();
 
   async function pickFolder() {
@@ -136,7 +137,7 @@
   <div class="foot">
     <span>{generated}/{project.rows.length} đã tạo</span>
     <span class="grow"></span>
-    <button class="primary" disabled={busy || opening || status.running || !status.connected} onclick={start}>Bắt đầu tạo</button>
+    <button class="primary" disabled={busy || opening || status.running || !status.connected || !waiting} title={waiting ? "" : "Không còn dòng nào đang Chờ"} onclick={start}>Bắt đầu tạo</button>
     <button disabled={stopping || !status.running} onclick={stop} title="Hủy các video đang tạo; dòng chưa xong về Chờ">Dừng</button>
     <button disabled={!failed.length || busy} onclick={() => retry(failed)}>Thử lại {failed.length} dòng lỗi</button>
     <button onclick={() => api.openPath(`${project.imageDir}\\_1click\\raw`)}>Mở folder video gốc</button>

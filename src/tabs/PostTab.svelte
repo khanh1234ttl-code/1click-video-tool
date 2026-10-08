@@ -76,22 +76,22 @@
   <section class="right">
     {#if row}
       {#if own}
-        <TextPreview bind:style={rowStyle} text={row.text || "Chữ mẫu trên video"} w={res.w} h={res.h} imagePath={row.imagePath} videoPath={row.rawVideo} />
+        <TextPreview bind:style={rowStyle} text={row.text || "Chữ mẫu trên video"} w={res.w} h={res.h} imagePath={row.imagePath} videoPath={row.rawVideo} maxHeight="42vh" />
       {:else}
-        <TextPreview bind:style={store.preset.text} text={row.text || "Chữ mẫu trên video"} w={res.w} h={res.h} imagePath={row.imagePath} videoPath={row.rawVideo} />
+        <TextPreview bind:style={store.preset.text} text={row.text || "Chữ mẫu trên video"} w={res.w} h={res.h} imagePath={row.imagePath} videoPath={row.rawVideo} maxHeight="42vh" />
       {/if}
       <label class="check"><input type="checkbox" bind:checked={own} onchange={saveOverride} /> Kiểu/vị trí chữ riêng cho video {row.stt}</label>
     {/if}
+    <div class="sections">
+      <details open>
+        <summary>Kiểu chữ {own ? `(riêng video ${selected})` : "(chung)"}</summary>
+        {#if own}<div oninput={saveOverride} onchange={saveOverride} role="presentation"><TextStyleEditor bind:style={rowStyle} /></div>
+        {:else}<TextStyleEditor bind:style={store.preset.text} />{/if}
+      </details>
+      <details><summary>Nhạc nền</summary><MusicSettings bind:music={store.preset.music} /></details>
+      <details><summary>Đầu ra</summary><OutputSettings bind:output={store.preset.output} /></details>
+    </div>
   </section>
-</div>
-<div class="sections">
-  <details open>
-    <summary>Kiểu chữ {own ? `(riêng video ${selected})` : "(chung)"}</summary>
-    {#if own}<div oninput={saveOverride} onchange={saveOverride} role="presentation"><TextStyleEditor bind:style={rowStyle} /></div>
-    {:else}<TextStyleEditor bind:style={store.preset.text} />{/if}
-  </details>
-  <details><summary>Nhạc nền</summary><MusicSettings bind:music={store.preset.music} /></details>
-  <details><summary>Đầu ra</summary><OutputSettings bind:output={store.preset.output} /></details>
 </div>
 <div class="foot">
   <span class="grow"></span>
@@ -101,12 +101,11 @@
 </div>
 
 <style>
-  .post { display: grid; grid-template-columns: minmax(380px, 1fr) minmax(320px, 1fr); gap: 12px; padding: 8px 12px; height: calc(100vh - 250px); min-height: 300px; }
+  .post { display: grid; grid-template-columns: minmax(360px, 5fr) minmax(360px, 6fr); gap: 12px; padding: 8px 12px 0; height: calc(100vh - 100px); }
   .left { display: flex; flex-direction: column; min-height: 0; }
   .left :global(.list) { flex: 1; }
-  .right { display: flex; flex-direction: column; gap: 6px; min-height: 0; }
+  .right { display: flex; flex-direction: column; gap: 6px; min-height: 0; overflow-y: auto; padding-right: 4px; }
   .check { flex-direction: row; align-items: center; color: var(--text); justify-content: center; }
-  .sections { padding: 0 12px; max-height: 30vh; overflow-y: auto; }
   details { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; margin-bottom: 6px; }
   summary { cursor: pointer; font-weight: 600; }
   details[open] summary { margin-bottom: 8px; }

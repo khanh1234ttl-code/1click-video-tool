@@ -136,6 +136,11 @@ describe("Start and rows", () => {
     input.value = "sóng vỗ"; input.dispatchEvent(new Event("change", { bubbles: true })); await settle();
     expect(boundary.invoke).toHaveBeenCalledWith("update_row", { edit: expect.objectContaining({ stt: 1, prompt: "sóng vỗ" }), imageDir: "A" });
   });
+  it("disables Bắt đầu tạo when no row is waiting", async () => {
+    for (const r of fixtureProject.rows) { r.status = { state: "generated" }; r.rawVideo = `A/_1click/raw/00${r.stt}.mp4`; }
+    await mountGen(idle);
+    expect(button("Bắt đầu tạo").disabled).toBe(true);
+  });
   it("counts generated rows and shows Xem for them", async () => {
     fixtureProject.rows[0].status = { state: "generated" }; fixtureProject.rows[0].rawVideo = "A/_1click/raw/001.mp4";
     await mountGen(idle);
