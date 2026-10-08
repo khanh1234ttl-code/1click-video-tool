@@ -905,3 +905,13 @@ async fn repair_failed_backup_cleanup_is_reported_and_protects_future_publish() 
     assert_eq!(std::fs::read(&final_path).unwrap(), b"new raw");
     assert!(message.contains(&backup.to_string_lossy().to_string()));
 }
+
+#[test]
+fn start_requires_both_ffmpeg_and_ffprobe() {
+    let ff = std::path::Path::new("C:/ff/ffmpeg.exe");
+    let fp = std::path::Path::new("C:/ff/ffprobe.exe");
+    assert_eq!(super::missing_media_tools(Some(ff), Some(fp)), None);
+    assert!(super::missing_media_tools(None, Some(fp)).unwrap().contains("FFmpeg"));
+    let no_probe = super::missing_media_tools(Some(ff), None).unwrap();
+    assert!(no_probe.contains("ffprobe") && no_probe.contains("tab Chạy"), "{no_probe}");
+}

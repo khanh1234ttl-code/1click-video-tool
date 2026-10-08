@@ -27,6 +27,15 @@ pub struct Status {
 #[path = "engine_tests.rs"]
 mod review_tests;
 
+/// Post-processing needs both tools: ffprobe validates downloads and sizes the overlay.
+fn missing_media_tools(ffmpeg: Option<&Path>, ffprobe: Option<&Path>) -> Option<String> {
+    match (ffmpeg, ffprobe) {
+        (None, _) => Some("Không tìm thấy FFmpeg. Chọn thư mục FFmpeg trong tab Chạy.".into()),
+        (_, None) => Some("Không tìm thấy ffprobe (đi kèm FFmpeg). Chọn thư mục FFmpeg có ffprobe.exe trong tab Chạy.".into()),
+        _ => None,
+    }
+}
+
 pub enum EngineEvent {
     Project(Project),
     Status(Status),
@@ -94,7 +103,9 @@ impl Engine {
     }
 
     pub fn status(&self) -> Status {
-        let ffmpeg = self.tools().0.map(|p| p.to_string_lossy().into_owned());
+        // Report FFmpeg as available only when ffprobe is too, so the Run tab offers the picker.
+        let (ff, fp) = self.tools();
+        let ffmpeg = ff.filter(|_| fp.is_some()).map(|p| p.to_string_lossy().into_owned());
         let st = self.state.lock().unwrap();
         Status {
             connected: self.bridge.is_connected(),
@@ -236,8 +247,9 @@ impl Engine {
         if !self.bridge.is_connected() {
             return Err("Extension chưa kết nối. Mở Chrome có cài extension 1Click rồi thử lại.".into());
         }
-        if self.tools().0.is_none() {
-            return Err("Không tìm thấy FFmpeg. Chọn thư mục FFmpeg trong tab Chạy.".into());
+        let (ffmpeg, ffprobe) = self.tools();
+        if let Some(e) = missing_media_tools(ffmpeg.as_deref(), ffprobe.as_deref()) {
+            return Err(e);
         }
         let fx = self.start_effects()?;
         self.emit_status();

@@ -8,10 +8,17 @@
   let dragging = false;
   const SNAPS = [0.15, 0.5, 0.85];
 
+  let revision = 0;
+  // Read every input synchronously so the effect tracks size changes too; a font load that
+  // finishes after a newer one must not paint stale text or dimensions.
   $effect(() => {
     const s = { ...style };
     const t = text || "Chữ mẫu trên video";
-    ensureFont(s).then((family) => drawOverlay(canvas.getContext("2d")!, s, family, t, w, h));
+    const width = w, height = h;
+    const mine = ++revision;
+    ensureFont(s).then((family) => {
+      if (mine === revision && canvas) drawOverlay(canvas.getContext("2d")!, s, family, t, width, height);
+    });
   });
 
   function moveTo(ev: PointerEvent) {

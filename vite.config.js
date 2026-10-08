@@ -5,7 +5,12 @@ export default defineConfig(({ mode }) => ({
   // Components use plain CSS; Vitest 2's Vite environment cannot run Vite 6 CSS preprocessing.
   plugins: [svelte(mode === "test" ? { configFile: false, preprocess: vitePreprocess({ style: false }) } : {})],
   clearScreen: false,
-  server: { port: 1420, strictPort: true },
+  server: {
+    port: 1420,
+    strictPort: true,
+    // cargo rewrites DLLs under src-tauri/target while the app runs; watching them caused EBUSY.
+    watch: { ignored: ["**/src-tauri/**"] },
+  },
   resolve: { conditions: ["browser"] },
   test: { include: ["src/**/*.test.ts"], environment: "happy-dom" },
 }));
