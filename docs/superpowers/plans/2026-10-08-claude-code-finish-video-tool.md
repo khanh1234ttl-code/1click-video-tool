@@ -103,8 +103,8 @@ cargo test --lib review_exact_filename_beats_ambiguous_stem
 **Files:** App.svelte, PresetTab.svelte, SourceTab.svelte, lib/api.ts, commands.rs, vite.config.js, tabs/PresetTab.test.ts.
 **Interfaces:** Scoped API `setPreset(preset: Preset, imageDir: string)`; backend kiểm tra image_dir trong cùng engine transaction. App await preset flush trước đổi tab/project; named preset Save flush intended snapshot trước save_preset.
 
-- [ ] Mount component thật bằng Svelte mount/unmount với happy-dom; fake timers cho debounce 400ms. Mock Tauri boundary, không mock PresetTab. Browser conditions nếu Svelte resolve server.
-- [ ] Viết test đổi quality 1080p và Lưu ngay, với assertions sau (calls/toasts/startRun là spies của boundary trong test):
+- [x] Mount component thật bằng Svelte mount/unmount với happy-dom; fake timers cho debounce 400ms. Mock Tauri boundary, không mock PresetTab. Browser conditions nếu Svelte resolve server.
+- [x] Viết test đổi quality 1080p và Lưu ngay, với assertions sau (calls/toasts/startRun là spies của boundary trong test):
 
 ```ts
 expect(calls.map(c => c.type)).toEqual(["setPreset", "savePreset"]);
@@ -115,9 +115,9 @@ expect(toasts).not.toContain("Đã lưu preset");
 expect(startRun).not.toHaveBeenCalled();
 ```
 
-- [ ] Thêm A timer pending -> switch B -> advance timers: không sửa preset B. Load preset mới không bị pending local edit ghi đè. Source panel A STT1 -> B STT1 không ghi fields A vào B.
-- [ ] `npm test -- src/tabs/PresetTab.test.ts` phải RED đúng lỗi, rồi sửa ordered flush/queue, cancel/scope timer và backend guard; toast thành công chỉ sau save thành công.
-- [ ] Reset/re-key RowPanel theo project identity. Smoke app thật change+Save/Run ngay và đọc JSON disk. Commit `fix: flush and scope preset edits before navigation`.
+- [x] Thêm A timer pending -> switch B -> advance timers: không sửa preset B. Load preset mới không bị pending local edit ghi đè. Source panel A STT1 -> B STT1 không ghi fields A vào B.
+- [x] `npm test -- src/tabs/PresetTab.test.ts` phải RED đúng lỗi, rồi sửa ordered flush/queue, cancel/scope timer và backend guard; toast thành công chỉ sau save thành công.
+- [x] Reset/re-key RowPanel theo project identity. Smoke app thật change+Save/Run ngay và đọc JSON disk. Commit `fix: flush and scope preset edits before navigation`.
 
 ### Task 4: Âm gốc không nhạc
 
