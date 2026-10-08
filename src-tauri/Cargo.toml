@@ -1,0 +1,32 @@
+[package]
+name = "oneclick-video-tool"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+name = "oneclick_video_tool_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["protocol-asset"] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tokio-tungstenite = "0.24"
+futures-util = "0.3"
+anyhow = "1"
+csv = "1"
+calamine = "0.26"
+natord = "1"
+rand = "0.8"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png", "webp"] }
+base64 = "0.22"
+
+[dev-dependencies]
+tempfile = "3"
+rust_xlsxwriter = "0.79"

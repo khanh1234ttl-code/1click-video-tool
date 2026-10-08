@@ -1,0 +1,8 @@
+:root { --bg: #f6f7f9; --panel: #ffffff; --text: #1d2330; --muted: #6b7385; --line: #dfe3ea; --accent: #2f6fed; --ok: #1f9d55; --bad: #d64545; --warn: #c98a0b; font-family: "Segoe UI", Arial, sans-serif; font-size: 14px; color: var(--text); }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); }
+button { font: inherit; padding: 6px 12px; border: 1px solid var(--line); border-radius: 6px; background: var(--panel); cursor: pointer; }
+button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+button:disabled { opacity: .5; cursor: default; }
+input, select, textarea { font: inherit; padding: 5px 8px; border: 1px solid var(--line); border-radius: 6px; background: #fff; }
+label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); font-size: 12px; }
