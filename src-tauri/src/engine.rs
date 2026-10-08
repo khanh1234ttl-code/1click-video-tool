@@ -523,7 +523,8 @@ impl Engine {
         let overlay = p.work_dir().join("overlays").join(format!("{:03}.png", op.stt));
         let overlay = (!r.text.trim().is_empty() && overlay.is_file()).then_some(overlay);
         let m = &p.preset.music;
-        let mix = r.resolved_music.clone().filter(|f| f.is_file()).map(|music| MixParams { music, music_volume: m.music_volume, original_volume: m.original_volume, fade_in: m.fade_in, fade_out: m.fade_out });
+        let mix = r.resolved_music.clone().filter(|f| f.is_file()).map(|music| MixParams { music, music_volume: m.music_volume, fade_in: m.fade_in, fade_out: m.fade_out });
+        let original_volume = m.original_volume;
         let out_dir = p.preset.output.folder.clone().unwrap_or_else(|| p.image_dir.join("Output"));
         let temp = Self::temporary(&op, &out_dir);
         let cleanup = temp.clone();
@@ -538,7 +539,7 @@ impl Engine {
                 let probe = media::probe(&ffprobe, &raw).map_err(|e| e.to_string())?;
                 #[cfg(test)]
                 hooks.checkpoint_blocking(review_tests::Boundary::Process);
-                media::run_tool(&ffmpeg, &media::build_args(&raw, overlay.as_deref(), mix.as_ref(), &probe, &temp)).map_err(|e| e.to_string())?;
+                media::run_tool(&ffmpeg, &media::build_args(&raw, overlay.as_deref(), mix.as_ref(), original_volume, &probe, &temp)).map_err(|e| e.to_string())?;
                 Ok(temp)
             }).await.unwrap_or_else(|e| Err(e.to_string())),
             (None, _, _) => Err("Thiếu video gốc".into()),

@@ -47,7 +47,6 @@ pub fn probe(ffprobe: &Path, file: &Path) -> Result<Probe> {
 pub struct MixParams {
     pub music: PathBuf,
     pub music_volume: f32,
-    pub original_volume: f32,
     pub fade_in: f32,
     pub fade_out: f32,
 }
@@ -56,9 +55,10 @@ fn s(p: &Path) -> String {
     p.to_string_lossy().into_owned()
 }
 
-/// Arguments for one output video: optional text overlay (PNG scaled to the video) and optional
-/// looped background music mixed under the original audio (or used alone when there is none).
-pub fn build_args(input: &Path, overlay: Option<&Path>, mix: Option<&MixParams>, probe: &Probe, output: &Path) -> Vec<String> {
+/// Arguments for one output video: optional text overlay (PNG scaled to the video), optional
+/// looped background music mixed under the original audio (or used alone when there is none),
+/// and the original audio's gain, which applies with or without music.
+pub fn build_args(input: &Path, overlay: Option<&Path>, mix: Option<&MixParams>, original_volume: f32, probe: &Probe, output: &Path) -> Vec<String> {
     let mut a: Vec<String> = ["-y", "-hide_banner", "-loglevel", "error", "-i"].iter().map(|x| x.to_string()).collect();
     a.push(s(input));
     let mut next = 1;
@@ -86,17 +86,22 @@ pub fn build_args(input: &Path, overlay: Option<&Path>, mix: Option<&MixParams>,
             chain += &format!(",afade=t=out:st={:.3}:d={}", (d - m.fade_out as f64).max(0.0), m.fade_out);
         }
         if probe.has_audio {
-            filters.push(format!("{chain}[m];[0:a]volume={}[o];[o][m]amix=inputs=2:duration=first:normalize=0[a]", m.original_volume));
+            filters.push(format!("{chain}[m];[0:a]volume={original_volume}[o];[o][m]amix=inputs=2:duration=first:normalize=0[a]"));
         } else {
             filters.push(format!("{chain}[a]"));
         }
+    }
+    // Without music the original track is copied untouched only at full volume.
+    let gain_only = mu_idx.is_none() && probe.has_audio && (original_volume - 1.0).abs() > f32::EPSILON;
+    if gain_only {
+        filters.push(format!("[0:a]volume={original_volume}[a]"));
     }
     if !filters.is_empty() {
         a.extend(["-filter_complex".to_string(), filters.join(";")]);
     }
     let v: &[&str] = if ov_idx.is_some() { &["-map", "[v]", "-c:v", "libx264", "-crf", "18", "-preset", "veryfast", "-pix_fmt", "yuv420p"] } else { &["-map", "0:v", "-c:v", "copy"] };
     a.extend(v.iter().map(|x| x.to_string()));
-    if mu_idx.is_some() {
+    if mu_idx.is_some() || gain_only {
         a.extend(["-map", "[a]", "-c:a", "aac", "-b:a", "192k"].iter().map(|x| x.to_string()));
     } else if probe.has_audio {
         a.extend(["-map", "0:a", "-c:a", "copy"].iter().map(|x| x.to_string()));
@@ -172,7 +177,7 @@ mod tests {
     }
 
     fn mix() -> MixParams {
-        MixParams { music: "C:/nhạc/bài 1.mp3".into(), music_volume: 0.25, original_volume: 1.0, fade_in: 1.0, fade_out: 1.5 }
+        MixParams { music: "C:/nhạc/bài 1.mp3".into(), music_volume: 0.25, fade_in: 1.0, fade_out: 1.5 }
     }
 
     #[test]
@@ -183,7 +188,7 @@ mod tests {
 
     #[test]
     fn args_overlay_and_mix() {
-        let a = build_args(Path::new("in.mp4"), Some(Path::new("ov.png")), Some(&mix()), &probe_720(true), Path::new("out.mp4"));
+        let a = build_args(Path::new("in.mp4"), Some(Path::new("ov.png")), Some(&mix()), 1.0, &probe_720(true), Path::new("out.mp4"));
         let fc = &a[a.iter().position(|x| x == "-filter_complex").unwrap() + 1];
         assert!(fc.contains("[1:v]scale=1280:720[ov];[0:v][ov]overlay=0:0:format=auto[v]"), "{fc}");
         assert!(fc.contains("[2:a]atrim=0:10.005"), "{fc}");
@@ -196,7 +201,7 @@ mod tests {
 
     #[test]
     fn args_without_original_audio() {
-        let a = build_args(Path::new("in.mp4"), None, Some(&mix()), &probe_720(false), Path::new("out.mp4"));
+        let a = build_args(Path::new("in.mp4"), None, Some(&mix()), 1.0, &probe_720(false), Path::new("out.mp4"));
         let fc = &a[a.iter().position(|x| x == "-filter_complex").unwrap() + 1];
         assert!(fc.starts_with("[1:a]atrim"), "{fc}");
         assert!(!fc.contains("amix"), "{fc}");
@@ -205,7 +210,7 @@ mod tests {
 
     #[test]
     fn args_text_only_copies_original_audio() {
-        let a = build_args(Path::new("in.mp4"), Some(Path::new("ov.png")), None, &probe_720(true), Path::new("out.mp4"));
+        let a = build_args(Path::new("in.mp4"), Some(Path::new("ov.png")), None, 1.0, &probe_720(true), Path::new("out.mp4"));
         assert!(a.windows(2).any(|w| w[0] == "-map" && w[1] == "0:a"));
         assert!(a.windows(2).any(|w| w[0] == "-c:a" && w[1] == "copy"));
     }
@@ -213,7 +218,7 @@ mod tests {
     #[test]
     fn zero_fades_are_omitted() {
         let m = MixParams { fade_in: 0.0, fade_out: 0.0, ..mix() };
-        let a = build_args(Path::new("in.mp4"), None, Some(&m), &probe_720(true), Path::new("out.mp4"));
+        let a = build_args(Path::new("in.mp4"), None, Some(&m), 1.0, &probe_720(true), Path::new("out.mp4"));
         assert!(!a.iter().any(|x| x.contains("afade")));
     }
 
@@ -241,5 +246,39 @@ mod tests {
         let bytes = base64::engine::general_purpose::STANDARD.decode(&data[23..]).unwrap();
         let img = image::load_from_memory(&bytes).unwrap();
         assert_eq!((img.width(), img.height()), (1920, 960));
+    }
+
+    fn filter_of(a: &[String]) -> Option<&String> {
+        a.iter().position(|x| x == "-filter_complex").map(|i| &a[i + 1])
+    }
+
+    #[test]
+    fn no_music_reduced_original_volume_is_filtered_and_reencoded() {
+        for (vol, expected) in [(0.0, "[0:a]volume=0[a]"), (0.5, "[0:a]volume=0.5[a]")] {
+            let a = build_args(Path::new("in.mp4"), None, None, vol, &probe_720(true), Path::new("out.mp4"));
+            assert_eq!(filter_of(&a).map(String::as_str), Some(expected));
+            assert!(a.windows(2).any(|w| w[0] == "-map" && w[1] == "[a]"), "{a:?}");
+            assert!(a.windows(2).any(|w| w[0] == "-c:a" && w[1] == "aac"), "{a:?}");
+        }
+    }
+
+    #[test]
+    fn no_music_full_original_volume_copies_audio() {
+        let a = build_args(Path::new("in.mp4"), None, None, 1.0, &probe_720(true), Path::new("out.mp4"));
+        assert_eq!(filter_of(&a), None);
+        assert!(a.windows(2).any(|w| w[0] == "-map" && w[1] == "0:a"));
+        assert!(a.windows(2).any(|w| w[0] == "-c:a" && w[1] == "copy"));
+    }
+
+    #[test]
+    fn no_audio_and_no_music_maps_no_audio() {
+        let a = build_args(Path::new("in.mp4"), None, None, 0.3, &probe_720(false), Path::new("out.mp4"));
+        assert!(!a.iter().any(|x| x == "0:a" || x == "[a]" || x == "-c:a"), "{a:?}");
+    }
+
+    #[test]
+    fn music_mix_uses_the_original_volume_parameter() {
+        let a = build_args(Path::new("in.mp4"), None, Some(&mix()), 0.4, &probe_720(true), Path::new("out.mp4"));
+        assert!(filter_of(&a).unwrap().contains("[0:a]volume=0.4[o]"), "{a:?}");
     }
 }

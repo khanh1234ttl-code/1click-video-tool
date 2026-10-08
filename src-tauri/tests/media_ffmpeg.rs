@@ -38,8 +38,8 @@ fn overlay_is_scaled_to_video_and_music_is_mixed() {
     img.save(&ov).unwrap();
 
     let probe_in = probe(&ffprobe, &raw).unwrap();
-    let mix = MixParams { music: music.clone(), music_volume: 0.3, original_volume: 1.0, fade_in: 0.5, fade_out: 0.5 };
-    run_tool(&ffmpeg, &build_args(&raw, Some(&ov), Some(&mix), &probe_in, &out)).unwrap();
+    let mix = MixParams { music: music.clone(), music_volume: 0.3, fade_in: 0.5, fade_out: 0.5 };
+    run_tool(&ffmpeg, &build_args(&raw, Some(&ov), Some(&mix), 1.0, &probe_in, &out)).unwrap();
 
     let p = probe(&ffprobe, &out).unwrap();
     assert_eq!((p.width, p.height), (1920, 1080));
@@ -59,9 +59,29 @@ fn video_without_audio_gets_music_only() {
     ff(&ffmpeg, &["-y", "-v", "error", "-f", "lavfi", "-i", "sine=duration=5", music.to_str().unwrap()]);
     let pin = probe(&ffprobe, &raw).unwrap();
     assert!(!pin.has_audio);
-    let mix = MixParams { music, music_volume: 0.5, original_volume: 1.0, fade_in: 0.0, fade_out: 0.5 };
-    run_tool(&ffmpeg, &build_args(&raw, None, Some(&mix), &pin, &out)).unwrap();
+    let mix = MixParams { music, music_volume: 0.5, fade_in: 0.0, fade_out: 0.5 };
+    run_tool(&ffmpeg, &build_args(&raw, None, Some(&mix), 1.0, &pin, &out)).unwrap();
     let p = probe(&ffprobe, &out).unwrap();
     assert!(p.has_audio);
     assert!((p.duration - 2.0).abs() < 0.2, "music trimmed to the video: {}", p.duration);
+}
+
+/// Peak absolute sample of the decoded audio track.
+fn audio_peak(ffmpeg: &Path, file: &Path) -> f32 {
+    let pcm = file.with_extension("f32");
+    ff(ffmpeg, &["-y", "-v", "error", "-i", file.to_str().unwrap(), "-vn", "-f", "f32le", pcm.to_str().unwrap()]);
+    std::fs::read(pcm).unwrap().chunks_exact(4).map(|s| f32::from_le_bytes(s.try_into().unwrap()).abs()).fold(0.0, f32::max)
+}
+
+#[test]
+fn half_original_volume_halves_the_peak_without_music() {
+    let Some((ffmpeg, ffprobe)) = tools() else { return };
+    let tmp = tempfile::tempdir().unwrap();
+    let raw = tmp.path().join("tone.mp4");
+    let out = tmp.path().join("half.mp4");
+    ff(&ffmpeg, &["-y", "-v", "error", "-f", "lavfi", "-i", "color=size=64x64:duration=1", "-f", "lavfi", "-i", "sine=frequency=440:duration=1", "-shortest", "-c:v", "libx264", "-pix_fmt", "yuv420p", "-c:a", "aac", raw.to_str().unwrap()]);
+    let pin = probe(&ffprobe, &raw).unwrap();
+    run_tool(&ffmpeg, &build_args(&raw, None, None, 0.5, &pin, &out)).unwrap();
+    let ratio = audio_peak(&ffmpeg, &out) / audio_peak(&ffmpeg, &raw);
+    assert!((ratio - 0.5).abs() < 0.05, "peak ratio {ratio}");
 }
