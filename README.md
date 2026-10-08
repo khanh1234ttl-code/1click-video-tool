@@ -24,7 +24,7 @@ Text hiển thị suốt video. Nhạc nền được trộn dưới âm gốc c
 
 Mặc định, video thành phẩm nằm trong `<folder ảnh>\Output\`, theo tên `001_<tên ảnh>.mp4`, `002_<tên ảnh>.mp4`… Bấm **Mở folder Output** trong tab Chạy để xem kết quả.
 
-Dữ liệu dự án và video gốc nằm trong `<folder ảnh>\_1click\`. Tắt tool rồi mở lại cùng folder ảnh để tiếp tục dự án: dòng đang render được hỏi lại extension, không gửi lại và không tốn thêm lượt Veo.
+Dữ liệu dự án và video gốc nằm trong `<folder ảnh>\_1click\`. Tắt tool rồi mở lại cùng folder ảnh để tiếp tục dự án: dòng đang render được hỏi lại extension, không gửi lại và không tốn thêm lượt Veo. Có thể chuyển hoặc đổi tên cả folder ảnh: ảnh, video gốc, thành phẩm và nhạc nằm trong folder sẽ tự cập nhật đường dẫn.
 
 ## Lưu ý
 

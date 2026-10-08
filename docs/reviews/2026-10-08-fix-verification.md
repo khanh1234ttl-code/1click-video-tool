@@ -31,9 +31,15 @@ Không còn Important mở. Hai Minor của review đã sửa thêm ở Task 5 (
 - `git diff --check` → OK
 - Dev smoke không bật polling: app chạy, bridge nghe 17890, build lại Rust khi sửa file, 0 EBUSY.
 
-## Minor còn lại (chưa sửa, không claim đạt)
-- Dự án bị di chuyển: chỉ `image_dir` được rebase; `image_path`/`raw_video`/`output` vẫn là đường dẫn tuyệt đối.
-- "Dán nhiều prompt" luôn bắt đầu từ dòng 1 thay vì dòng đang chọn (ô nhập dòng bắt đầu vẫn sửa được).
-- Bóng chữ chỉ vẽ cùng `strokeText`: bật bóng mà độ dày viền 0 thì không có bóng.
-- TOFU: hai handshake đầu tiên đồng thời có thể cùng được chấp nhận (snapshot allowed id trước handshake).
-- Spec có nút Dừng riêng và mẫu tên file tùy chỉnh; bản này có Tạm dừng và tên cố định `{stt:03}_{stem}.mp4` theo plan.
+## Minor đã sửa sau chạy thật (Claude Code, 08/10/2026)
+| Minor | Commit | Test (RED → GREEN) |
+|---|---|---|
+| Bóng chữ không hiện khi viền 0; bóng sót sang lần vẽ sau | `f16687b` | `overlay.test.ts` (4) |
+| "Dán nhiều prompt" luôn từ dòng 1 | `9da6943` | `SourceTab.test.ts` (2) |
+| TOFU: hai handshake đầu đồng thời cùng được chấp nhận | `169939c` | `concurrent_first_handshakes_trust_only_one_extension` |
+| Dự án bị di chuyển chỉ rebase `image_dir` | (commit này) | `moved_project_rebases_paths_inside_the_old_folder`, `moved_project_rebases_mixed_separator_paths` |
+
+## Còn để người dùng quyết định
+- Spec có nút **Tạm dừng** và **Dừng** riêng. Bản này chỉ có một nút "Tạm dừng", hành vi là hủy job (giống Dừng).
+  Một "Tạm dừng" thật (để các video đã gửi chạy xong) cần bridge hủy từng item trong extension. Chưa làm.
+- Tên đầu ra cố định `{stt:03}_{tên ảnh}.mp4`, đúng mẫu mặc định của spec; chưa có ô sửa mẫu tên.
