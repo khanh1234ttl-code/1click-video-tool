@@ -131,10 +131,10 @@ pub fn build_args(
 ) -> Vec<String>
 ```
 
-- [ ] `cargo test --test e2e review_no_music_honors_original_mute` sau Task1 phải RED vì PCM khác zero.
-- [ ] Argument tests: không nhạc + audio, volume 0/0.5 filter và AAC re-encode; 1.0 có thể copy. Không audio/no music không map audio. Có music giữ fade/amix.
-- [ ] Sửa mọi call site cho đúng preset volume; tránh hai nguồn volume khác nhau. Test PCM hiện có yêu cầu peak <0.00001; thêm 0.5 gain check với tolerance.
-- [ ] GREEN e2e mute và media_ffmpeg, review; commit `fix: honor original volume without background music`.
+- [x] `cargo test --test e2e review_no_music_honors_original_mute` sau Task1 phải RED vì PCM khác zero.
+- [x] Argument tests: không nhạc + audio, volume 0/0.5 filter và AAC re-encode; 1.0 có thể copy. Không audio/no music không map audio. Có music giữ fade/amix.
+- [x] Sửa mọi call site cho đúng preset volume; tránh hai nguồn volume khác nhau. Test PCM hiện có yêu cầu peak <0.00001; thêm 0.5 gain check với tolerance.
+- [x] GREEN e2e mute và media_ffmpeg, review; commit `fix: honor original volume without background music`.
 
 ### Task 5: Preview dimensions và thiếu ffprobe
 
