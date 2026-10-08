@@ -34,6 +34,28 @@ async fn review_no_music_honors_original_mute() {
 }
 
 #[tokio::test(flavor = "multi_thread")]
+async fn generated_row_exports_on_reprocess() {
+    let ffmpeg = media::find_tool("ffmpeg", None).expect("ffmpeg required");
+    let tmp = tempfile::tempdir().unwrap();
+    image::RgbImage::new(16, 16).save(tmp.path().join("a.png")).unwrap();
+    let raw = tmp.path().join("tone.mp4");
+    media::run_tool(&ffmpeg, &["-y", "-v", "error", "-f", "lavfi", "-i", "color=size=64x64:duration=1", "-f", "lavfi", "-i", "sine=duration=1", "-shortest", "-c:v", "libx264", "-c:a", "aac", raw.to_str().unwrap()].map(String::from)).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let (bridge, _) = Bridge::start(listener, None).await;
+    let engine = Engine::new(bridge, tmp.path().join("app"), Arc::new(|_| {}));
+    engine.open_project(tmp.path()).unwrap();
+    engine.edit(|p| { p.rows[0].status = RowStatus::Generated; p.rows[0].raw_video = Some(raw); }).unwrap();
+    engine.reprocess(&[1]).await;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    loop {
+        let p = engine.project().unwrap();
+        if p.rows[0].status == RowStatus::Done { assert!(p.rows[0].output.as_ref().unwrap().is_file()); break; }
+        assert!(tokio::time::Instant::now() < deadline, "{:?}", p.rows[0]);
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn batch_runs_end_to_end() {
     let Some(ffmpeg) = media::find_tool("ffmpeg", None) else { eprintln!("ffmpeg missing, skip"); return };
     let tmp = tempfile::tempdir().unwrap();
@@ -59,6 +81,7 @@ async fn batch_runs_end_to_end() {
 
     engine.open_project(&images).unwrap();
     engine.edit(|p| {
+        p.preset.gen.auto_post_process = true; // one-pass pipeline
         p.common_prompt = "một cảnh đẹp".into();
         p.rows[0].text = "Tập 1".into();
         p.preset.music.folder = Some(music_dir.clone());

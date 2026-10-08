@@ -151,13 +151,19 @@ impl Runner {
 
     pub fn on_raw_ready(&mut self, stt: u32, result: Result<PathBuf, String>) -> Vec<Effect> {
         self.importing.remove(&stt);
+        let auto = self.project.preset.gen.auto_post_process;
         let Some(r) = self.project.row_mut(stt) else { return vec![] };
         let fx = match result {
             Ok(p) => {
                 r.raw_video = Some(p);
-                r.status = RowStatus::Downloaded;
                 self.failure_streak = 0;
-                vec![Effect::PostProcess(stt), Effect::Save, Effect::Changed]
+                if auto {
+                    r.status = RowStatus::Downloaded;
+                    vec![Effect::PostProcess(stt), Effect::Save, Effect::Changed]
+                } else {
+                    r.status = RowStatus::Generated;
+                    vec![Effect::Save, Effect::Changed]
+                }
             }
             Err(e) => {
                 r.status = RowStatus::Failed { stage: Stage::Download, message: e };
@@ -229,7 +235,7 @@ impl Runner {
     }
 
     pub fn reprocess(&mut self, stts: &[u32]) -> Vec<Effect> {
-        let selected: Vec<_> = self.project.rows.iter().filter(|r| stts.contains(&r.stt) && r.raw_video.is_some() && matches!(r.status, RowStatus::Done | RowStatus::Downloaded | RowStatus::Failed { stage: Stage::PostProcess, .. })).map(|r| r.stt).collect();
+        let selected: Vec<_> = self.project.rows.iter().filter(|r| stts.contains(&r.stt) && r.raw_video.is_some() && matches!(r.status, RowStatus::Done | RowStatus::Downloaded | RowStatus::Generated | RowStatus::Failed { stage: Stage::PostProcess, .. })).map(|r| r.stt).collect();
         let assigned: Vec<_> = selected.iter().map(|s| self.project.row(*s).unwrap().music.clone()).collect();
         let m = &self.project.preset.music;
         let tracks = crate::music::list_tracks(m.folder.as_deref());
@@ -252,6 +258,11 @@ impl Runner {
     pub fn recover_after_load(&mut self) -> Vec<Effect> {
         let mut fx = vec![];
         for r in self.project.rows.iter_mut() {
+            if r.status == RowStatus::Generated && !r.raw_video.as_ref().is_some_and(|p| p.exists()) {
+                r.status = RowStatus::Pending;
+                r.raw_video = None;
+                continue;
+            }
             if matches!(r.status, RowStatus::PostProcessing | RowStatus::Downloaded) {
                 if r.raw_video.as_ref().map_or(false, |p| p.exists()) {
                     r.status = RowStatus::Downloaded;
@@ -486,6 +497,7 @@ mod tests {
     #[test]
     fn downloads_out_of_order_map_by_stt() {
         let (mut r, job) = started(3);
+        r.project.preset.gen.auto_post_process = true; // tests the auto pipeline
         let fx = r.on_message(FromExt::ItemProgress { job_id: job.clone(), index: 2, percent: 40 });
         assert_eq!(status(&r, 2), RowStatus::Rendering { percent: 40 });
         assert_eq!(fx, vec![Effect::Changed]);
@@ -584,5 +596,70 @@ mod tests {
         let fx = r.recover_after_load();
         assert_eq!(fx[0], Effect::PostProcess(1));
         assert_eq!(status(&r, 1), RowStatus::Downloaded);
+    }
+
+    #[test]
+    fn raw_ready_without_auto_ends_generated() {
+        let (mut r, _job) = started(1);
+        let fx = r.on_raw_ready(1, Ok("C:/i/_1click/raw/001.mp4".into()));
+        assert_eq!(status(&r, 1), RowStatus::Generated);
+        assert!(!fx.contains(&Effect::PostProcess(1)));
+        assert!(fx.contains(&Effect::Save));
+        assert!(!r.running, "only generated rows left: not running");
+    }
+
+    #[test]
+    fn raw_ready_with_auto_post_processes() {
+        let (mut r, _job) = started(1);
+        r.project.preset.gen.auto_post_process = true;
+        let fx = r.on_raw_ready(1, Ok("raw".into()));
+        assert_eq!(status(&r, 1), RowStatus::Downloaded);
+        assert!(fx.contains(&Effect::PostProcess(1)));
+    }
+
+    #[test]
+    fn reprocess_exports_generated_rows() {
+        let mut r = runner(2);
+        r.project.rows[0].status = RowStatus::Generated;
+        r.project.rows[0].raw_video = Some("raw1".into());
+        let fx = r.reprocess(&[1, 2]);
+        assert!(fx.contains(&Effect::PostProcess(1)));
+        assert!(!fx.contains(&Effect::PostProcess(2)), "row 2 has no raw video");
+    }
+
+    #[test]
+    fn recover_keeps_generated_and_resets_missing_raw() {
+        let tmp = tempfile::tempdir().unwrap();
+        let raw = tmp.path().join("001.mp4");
+        std::fs::write(&raw, b"x").unwrap();
+        let mut r = runner(2);
+        r.project.rows[0].status = RowStatus::Generated;
+        r.project.rows[0].raw_video = Some(raw);
+        r.project.rows[1].status = RowStatus::Generated;
+        r.project.rows[1].raw_video = Some(tmp.path().join("gone.mp4"));
+        let fx = r.recover_after_load();
+        assert!(!fx.iter().any(|f| matches!(f, Effect::PostProcess(_))));
+        assert_eq!(status(&r, 1), RowStatus::Generated);
+        assert_eq!(status(&r, 2), RowStatus::Pending);
+        assert_eq!(r.project.rows[1].raw_video, None);
+        assert!(!r.running);
+    }
+
+    #[test]
+    fn stop_leaves_generated_rows_alone() {
+        let mut r = runner(1);
+        r.project.rows[0].status = RowStatus::Generated;
+        r.project.rows[0].raw_video = Some("raw".into());
+        r.pause();
+        assert_eq!(status(&r, 1), RowStatus::Generated);
+    }
+
+    #[test]
+    fn old_project_json_defaults_auto_post_process_off() {
+        let p: crate::model::Project = serde_json::from_str(r#"{"version":1,"imageDir":"C:/i","rows":[{"stt":1,"imagePath":"C:/i/a.png","status":{"state":"done"},"rawVideo":"C:/i/_1click/raw/001.mp4"}],"preset":{"gen":{"mode":"imageToVideo","aspectRatio":"16:9","quality":"720p","concurrency":3,"maxRetries":0}}}"#).unwrap();
+        assert!(!p.preset.gen.auto_post_process);
+        assert_eq!(p.rows[0].status, RowStatus::Done);
+        let json = serde_json::to_value(RowStatus::Generated).unwrap();
+        assert_eq!(json, serde_json::json!({"state": "generated"}));
     }
 }

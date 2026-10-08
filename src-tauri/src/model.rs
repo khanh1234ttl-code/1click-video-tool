@@ -27,11 +27,13 @@ pub struct GenSettings {
     pub quality: String,
     pub concurrency: u8,
     pub max_retries: u8,
+    /// Post-process right after download; off = stop at Generated and export in step 2.
+    pub auto_post_process: bool,
 }
 
 impl Default for GenSettings {
     fn default() -> Self {
-        Self { mode: GenMode::ImageToVideo, aspect_ratio: "16:9".into(), quality: "720p".into(), concurrency: 3, max_retries: 2 }
+        Self { mode: GenMode::ImageToVideo, aspect_ratio: "16:9".into(), quality: "720p".into(), concurrency: 3, max_retries: 2, auto_post_process: false }
     }
 }
 
@@ -157,6 +159,8 @@ pub enum RowStatus {
     Sending,
     Rendering { percent: u8 },
     Downloaded,
+    /// Raw video saved; waiting for the user's export (step 2).
+    Generated,
     PostProcessing,
     Done,
     Failed { stage: Stage, message: String },

@@ -395,7 +395,7 @@ impl Engine {
     fn claim_locked(&self, st: &mut State, stt: u32, postprocess: bool) -> Option<Operation> {
         let row = st.runner.as_ref()?.project.row(stt)?;
         let eligible = if postprocess {
-            row.raw_video.is_some() && matches!(row.status, RowStatus::Downloaded | RowStatus::Done | RowStatus::Failed { stage: crate::model::Stage::PostProcess, .. })
+            row.raw_video.is_some() && matches!(row.status, RowStatus::Downloaded | RowStatus::Generated | RowStatus::Done | RowStatus::Failed { stage: crate::model::Stage::PostProcess, .. })
         } else { row.status.is_active() };
         if !eligible { return None; }
         if postprocess { st.runner.as_mut()?.on_postprocess_started(stt); }

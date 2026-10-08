@@ -283,6 +283,7 @@ async fn review_pause_during_import_cannot_publish_raw() {
     let (tmp, e, dir) = fixture().await;
     let raw = video(tmp.path());
     e.edit(|p| {
+        p.preset.gen.auto_post_process = true; // tests the auto pipeline
         p.rows[0].status = RowStatus::Sending;
         p.rows[0].job_id = Some("job".into())
     })
@@ -353,6 +354,7 @@ async fn review_duplicate_download_query_imports_and_processes_once() {
     let (tmp, e, _) = fixture().await;
     let raw = video(tmp.path());
     e.edit(|p| {
+        p.preset.gen.auto_post_process = true; // tests the auto pipeline
         p.rows[0].status = RowStatus::Sending;
         p.rows[0].job_id = Some("job".into())
     })
@@ -508,6 +510,7 @@ async fn review_raw_publication_save_failure_restores_previous_file() {
     let final_path = rawdir.join("001.mp4");
     std::fs::write(&final_path, b"previous raw").unwrap();
     e.edit(|p| {
+        p.preset.gen.auto_post_process = true; // tests the auto pipeline
         p.rows[0].status = RowStatus::Sending;
         p.rows[0].job_id = Some("job".into())
     })
@@ -668,6 +671,7 @@ async fn repair_failed_import_completion_can_replay_query_without_generation() {
     let (tmp, e, dir) = fixture().await;
     let raw = video(tmp.path());
     e.edit(|p| {
+        p.preset.gen.auto_post_process = true; // tests the auto pipeline
         p.rows[0].status = RowStatus::Sending;
         p.rows[0].job_id = Some("job".into())
     })
@@ -914,4 +918,19 @@ fn start_requires_both_ffmpeg_and_ffprobe() {
     assert!(super::missing_media_tools(None, Some(fp)).unwrap().contains("FFmpeg"));
     let no_probe = super::missing_media_tools(Some(ff), None).unwrap();
     assert!(no_probe.contains("ffprobe") && no_probe.contains("tab Chạy"), "{no_probe}");
+}
+#[tokio::test]
+async fn generated_rows_are_claimed_for_export() {
+    let (tmp, e, dir) = fixture().await;
+    let raw = video(tmp.path());
+    e.edit(|p| {
+        p.rows[0].raw_video = Some(raw);
+        p.rows[0].status = RowStatus::Generated
+    })
+    .unwrap();
+    e.reprocess(&[1]).await;
+    assert_ne!(e.project().unwrap().rows[0].status, RowStatus::Generated, "export must claim a generated row");
+    finished(&e).await;
+    assert_eq!(e.project().unwrap().rows[0].status, RowStatus::Done);
+    assert!(dir.join("Output/001_a.mp4").exists());
 }
