@@ -4,13 +4,38 @@ Ngày 08/10/2026. Người dùng yêu cầu commit và viết kế hoạch để
 
 Đọc `AGENTS.md`, `docs/HANDOFF-CODEX.md`, file này, rồi `docs/superpowers/plans/2026-10-08-claude-code-finish-video-tool.md`. Review toàn nhánh được lưu trong git tại `docs/reviews/2026-10-08-whole-branch-review.md`.
 
-## Cập nhật mới nhất: tạm dừng theo yêu cầu người dùng
+## Trạng thái cuối: kế hoạch Claude Code hoàn tất (Tasks 1–8)
 
-Task 3 đã commit **WIP `04a1726`**, chưa scoped review, chưa hoàn tất. Người dùng yêu cầu **commit và tạm dừng**; chỉ làm tiếp khi được yêu cầu. Đọc `docs/reviews/2026-10-08-task-3-checkpoint.md` trước khi resume.
+Ngày 08/10/2026, Claude Code đã làm xong Tasks 3–8. Nhánh `feat/video-tool`, chỉ commit cục bộ, không push/merge.
 
-Đã có preset flush/queue, scoped preset/row commands, navigation lock và component regressions. UI **25/25**, Rust unit **82/82**, batch e2e **1/1**, media **2/2**, extension **11/11**, build/tsc đạt. Full cargo vẫn lỗi mute Task 4.
+- **Task 3** (`7903573`, `acffcde`): Tạm dừng vẫn bấm được khi start_run còn chuẩn bị; khóa chuyển tab giữ đến khi cả hai lệnh xong. Có 5 test component RunTab.
+- **Task 4** (`0d4e465`): Âm gốc được áp dụng cả khi không có nhạc. Âm gốc 0% cho ra im lặng; 50% cho đỉnh âm giảm một nửa.
+- **Task 5** (`d6363e6`): TextPreview vẽ lại khi đổi khung và bỏ lần vẽ cũ. Bấm Start khi thiếu ffmpeg hoặc ffprobe thì báo lỗi trước khi gửi prompt. Vite bỏ qua `src-tauri/`.
+- **Task 6** (`5d5966c`): 7 Important đều có regression đạt. Xem `docs/reviews/2026-10-08-fix-verification.md`.
+- **Task 7** (`c5c53bf`): **chạy thật đạt 3/3**, dùng đúng 3 lượt Veo.
+  - Kết quả đúng thứ tự, có text riêng từng dòng, nhạc trộn dưới âm gốc, 1280×720, dài 10 s.
+  - Xem `docs/reviews/2026-10-08-live-run.md`.
+  - Vite dev từng crash vì EBUSY dưới `.superpowers/`; đã cho bỏ qua thư mục này.
+- **Task 8**: README cập nhật theo hành vi đã kiểm chứng (Tạm dừng, âm gốc/nhạc, khôi phục, ffprobe). Bộ cài mới:
+  `src-tauri/target/release/bundle/nsis/1Click Video Tool_0.1.0_x64-setup.exe`,
+  **3,132,010 bytes**, SHA256 `8E8502676BE42CD03F280534CA562A8697163EB5AC778E727FA1F51CE0EDC532`, build từ `c5c53bf`.
+  Commit cuối chỉ đổi docs, nên code trong bộ cài giống `c5c53bf`.
 
-**Việc đầu tiên khi resume:** sửa RunTab chặn Tạm dừng khi start_run đang encode. Viết RED test với startRun pending và status.running=true: Pause phải gọi được; navigation chỉ mở lại khi cả start/pause kết thúc, kiểm chứng cả hai thứ tự. Chưa viết test hoặc sửa finding này. Sau đó scoped review Task 3 trước khi đánh dấu hoàn tất. Native smoke dùng fixture/APPDATA riêng; generation **0**, helper/app đã đóng. Chưa build lại installer, không push/merge.
+Kiểm chứng cuối (đều exit 0):
+- `cargo test`: unit 87, e2e 2, media_ffmpeg 3.
+- `npm test`: 32/32.
+- `npm run build`, `npx tsc --noEmit`.
+- `npm run test:ext`: 11/11.
+- Bridge trong git byte-identical với bản đang cài.
+
+Minor còn lại (chưa sửa): xem mục "Minor còn lại" trong `docs/reviews/2026-10-08-fix-verification.md`.
+- Dự án bị di chuyển chỉ rebase `image_dir`.
+- "Dán nhiều prompt" luôn bắt đầu từ dòng 1.
+- Bật bóng chữ mà viền 0 thì không có bóng.
+- TOFU có race khi hai handshake đầu đến cùng lúc.
+- Spec có nút Dừng riêng và tên file tùy chỉnh; bản này chưa có.
+
+Các mục bên dưới là lịch sử của những checkpoint trước, không phải trạng thái hiện tại.
 
 ## Tasks 1–2 đã hoàn tất
 

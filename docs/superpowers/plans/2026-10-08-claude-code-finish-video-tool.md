@@ -203,8 +203,8 @@ foreach ($row in $project.rows) {
 
 **Files:** README.md, HANDOFF-CLAUDE.md; installer NSIS.
 
-- [ ] README đúng hành vi preset/nhạc/recovery đã kiểm chứng.
-- [ ] Build mới từ mã đã review:
+- [x] README đúng hành vi preset/nhạc/recovery đã kiểm chứng.
+- [x] Build mới từ mã đã review:
 
 ```powershell
 cargo tauri build
@@ -212,8 +212,8 @@ Get-Item -LiteralPath 'src-tauri/target/release/bundle/nsis/1Click Video Tool_0.
 Get-FileHash -LiteralPath 'src-tauri/target/release/bundle/nsis/1Click Video Tool_0.1.0_x64-setup.exe' -Algorithm SHA256
 ```
 
-- [ ] Report exit0, installer mới tồn tại, size/SHA/commit, test counts, live evidence hoặc blocker. Installer trước WIP không dùng làm bằng chứng bản mới.
-- [ ] Commit docs cuối, git status sạch; giữ branch, đưa installer path và residual Minor cho người dùng.
+- [x] Report exit0, installer mới tồn tại, size/SHA/commit, test counts, live evidence hoặc blocker. Installer trước WIP không dùng làm bằng chứng bản mới.
+- [x] Commit docs cuối, git status sạch; giữ branch, đưa installer path và residual Minor cho người dùng.
 
 ## Prompt mở Claude Code
 
