@@ -194,8 +194,19 @@ impl Engine {
 
     /// Applies a user edit to the open project, saves it and notifies the UI.
     pub fn edit(&self, f: impl FnOnce(&mut Project)) -> Result<(), String> {
+        self.edit_checked(None, f)
+    }
+
+    pub fn edit_scoped(&self, image_dir: &Path, f: impl FnOnce(&mut Project)) -> Result<(), String> {
+        self.edit_checked(Some(image_dir), f)
+    }
+
+    fn edit_checked(&self, image_dir: Option<&Path>, f: impl FnOnce(&mut Project)) -> Result<(), String> {
         let mut st = self.state.lock().unwrap();
         let r = st.runner.as_mut().ok_or("Chưa mở dự án")?;
+        if image_dir.is_some_and(|dir| r.project.image_dir != dir) {
+            return Err("Dự án đã thay đổi; không thể lưu chỉnh sửa cũ".into());
+        }
         let before = r.project.clone();
         f(&mut r.project);
         if let Err(e) = project::save(&r.project) {
@@ -204,6 +215,21 @@ impl Engine {
         }
         (self.notify)(EngineEvent::Project(r.project.clone()));
         Ok(())
+    }
+
+    pub fn save_named_preset(&self, image_dir: &Path, name: &str) -> Result<(), String> {
+        let st = self.state.lock().unwrap();
+        let p = &st.runner.as_ref().ok_or("Chưa mở dự án")?.project;
+        if p.image_dir != image_dir {
+            return Err("Dự án đã thay đổi; không thể lưu preset cũ".into());
+        }
+        project::save_preset(&self.app_dir, name, &p.preset).map_err(|e| e.to_string())
+    }
+
+    pub fn load_named_preset(&self, image_dir: &Path, name: &str) -> Result<crate::model::Preset, String> {
+        let preset = project::load_preset(&self.app_dir, name).map_err(|e| e.to_string())?;
+        self.edit_scoped(image_dir, |p| p.preset = preset.clone())?;
+        Ok(preset)
     }
 
     pub async fn start(self: &Arc<Self>) -> Result<(), String> {

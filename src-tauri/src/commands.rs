@@ -45,8 +45,8 @@ pub fn get_project(engine: Eng) -> Option<Project> {
 }
 
 #[tauri::command]
-pub fn update_row(engine: Eng, edit: RowEdit) -> Result<(), String> {
-    engine.edit(|p| {
+pub fn update_row(engine: Eng, edit: RowEdit, image_dir: String) -> Result<(), String> {
+    engine.edit_scoped(Path::new(&image_dir), |p| {
         if let Some(r) = p.row_mut(edit.stt) {
             r.prompt = edit.prompt;
             r.text = edit.text;
@@ -80,8 +80,8 @@ pub fn import_table(engine: Eng, path: String) -> Result<Vec<String>, String> {
 }
 
 #[tauri::command]
-pub fn set_preset(engine: Eng, preset: Preset) -> Result<(), String> {
-    engine.edit(|p| p.preset = preset)
+pub fn set_preset(engine: Eng, preset: Preset, image_dir: String) -> Result<(), String> {
+    engine.edit_scoped(Path::new(&image_dir), |p| p.preset = preset)
 }
 
 #[tauri::command]
@@ -90,17 +90,13 @@ pub fn list_presets(engine: Eng) -> Vec<String> {
 }
 
 #[tauri::command]
-pub fn save_preset(engine: Eng, name: String) -> Result<(), String> {
-    let p = engine.project().ok_or("Chưa mở dự án")?;
-    project::save_preset(&engine.app_dir(), &name, &p.preset).map_err(|e| e.to_string())
+pub fn save_preset(engine: Eng, name: String, image_dir: String) -> Result<(), String> {
+    engine.save_named_preset(Path::new(&image_dir), &name)
 }
 
 #[tauri::command]
-pub fn load_preset(engine: Eng, name: String) -> Result<Preset, String> {
-    let preset = project::load_preset(&engine.app_dir(), &name).map_err(|e| e.to_string())?;
-    let copy = preset.clone();
-    engine.edit(|p| p.preset = copy)?;
-    Ok(preset)
+pub fn load_preset(engine: Eng, name: String, image_dir: String) -> Result<Preset, String> {
+    engine.load_named_preset(Path::new(&image_dir), &name)
 }
 
 #[tauri::command]

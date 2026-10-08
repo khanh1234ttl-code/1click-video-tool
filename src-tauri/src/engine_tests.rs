@@ -104,6 +104,54 @@ async fn fixture() -> (tempfile::TempDir, Arc<Engine>, PathBuf) {
     engine.open_project(&dir).unwrap();
     (tmp, engine, dir)
 }
+
+#[tokio::test]
+async fn review_scoped_edits_reject_old_project_without_touching_disk() {
+    let (tmp, engine, a) = fixture().await;
+    let b = tmp.path().join("B");
+    std::fs::create_dir_all(&b).unwrap();
+    image::RgbImage::new(8, 8).save(b.join("b.png")).unwrap();
+    engine.open_project(&b).unwrap();
+    let before = engine.project().unwrap();
+    assert!(engine.edit_scoped(&a, |p| {
+        p.preset.gen.quality = "1080p".into();
+        p.row_mut(1).unwrap().prompt = "fields from A".into();
+    }).is_err());
+    assert_eq!(engine.project().unwrap(), before);
+    assert_eq!(project::load(&b).unwrap().unwrap(), before);
+    engine.edit_scoped(&b, |p| p.preset.gen.quality = "1080p".into()).unwrap();
+    assert_eq!(project::load(&b).unwrap().unwrap().preset.gen.quality, "1080p");
+}
+
+#[tokio::test]
+async fn review_scoped_named_presets_reject_old_project() {
+    let (tmp, engine, a) = fixture().await;
+    let mut loaded = engine.project().unwrap().preset;
+    loaded.gen.quality = "1080p".into();
+    project::save_preset(&engine.app_dir(), "loaded", &loaded).unwrap();
+    let b = tmp.path().join("B");
+    std::fs::create_dir_all(&b).unwrap();
+    image::RgbImage::new(8, 8).save(b.join("b.png")).unwrap();
+    engine.open_project(&b).unwrap();
+    assert!(engine.save_named_preset(&a, "stale").is_err());
+    assert!(!project::list_presets(&engine.app_dir()).contains(&"stale".to_string()));
+    assert!(engine.load_named_preset(&a, "loaded").is_err());
+    assert_eq!(project::load(&b).unwrap().unwrap().preset.gen.quality, "720p");
+    engine.load_named_preset(&b, "loaded").unwrap();
+    engine.save_named_preset(&b, "fresh").unwrap();
+    assert_eq!(project::load_preset(&engine.app_dir(), "fresh").unwrap().gen.quality, "1080p");
+}
+
+#[tokio::test]
+async fn review_scoped_edit_failure_rolls_back() {
+    let (_tmp, engine, a) = fixture().await;
+    let before = engine.project().unwrap();
+    let work = before.work_dir();
+    std::fs::remove_dir_all(&work).unwrap();
+    std::fs::write(&work, "block directory").unwrap();
+    assert!(engine.edit_scoped(&a, |p| p.preset.gen.quality = "1080p".into()).is_err());
+    assert_eq!(engine.project().unwrap(), before);
+}
 async fn connected_fixture() -> (
     tempfile::TempDir,
     Arc<Engine>,

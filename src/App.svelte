@@ -11,6 +11,40 @@
   let status: Status = $state({ connected: false, extId: null, extVersion: null, ffmpeg: null, running: false });
   let toasts: { id: number; text: string }[] = $state([]);
   let n = 0;
+  let presetEditor: { flush: () => Promise<void> } | undefined = $state();
+  let navigation = 0;
+  let projectRevision = 0;
+  let navigating = $state(false);
+  let runBusy = $state(false);
+  let sourceBusy = $state(false);
+  async function beforeNavigate(projectOpening = false) {
+    if (runBusy || (sourceBusy && !projectOpening)) throw new Error("Đang xử lý thao tác hiện tại; vui lòng chờ hoàn tất");
+    if (!presetEditor) return;
+    await presetEditor.flush();
+    // Command acknowledgement can precede the project event. Run needs the durable snapshot.
+    const latest = await api.getProject();
+    if (latest?.imageDir !== project?.imageDir) throw new Error("Dự án đã thay đổi");
+    project = latest;
+  }
+  async function navigate(next: typeof tab) {
+    const revision = ++navigation;
+    navigating = true;
+    try { await beforeNavigate(); if (revision === navigation) tab = next; }
+    catch (e) { toast(e); }
+    finally { if (revision === navigation) navigating = false; }
+  }
+  async function receiveProject(p: Project) {
+    const revision = ++projectRevision;
+    const changed = project && project.imageDir !== p.imageDir;
+    if (changed) {
+      ++navigation;
+      try { await presetEditor?.flush(); } catch (e) { toast(e); }
+    }
+    if (revision === projectRevision) {
+      project = p;
+      if (changed) navigating = false;
+    }
+  }
   function toast(t: unknown) {
     const id = ++n;
     toasts = [...toasts, { id, text: String(t) }];
@@ -19,7 +53,7 @@
   onMount(() => {
     api.getProject().then((p) => (project = p));
     api.getStatus().then((s) => (status = s));
-    const offs = [api.onProject((p) => (project = p)), api.onStatus((s) => (status = s)), api.onToast(toast)];
+    const offs = [api.onProject(receiveProject), api.onStatus((s) => (status = s)), api.onToast(toast)];
     return () => offs.forEach((o) => o.then((f) => f()));
   });
 </script>
@@ -27,16 +61,16 @@
 <header>
   <strong>1Click Video Tool</strong>
   <nav>
-    <button class:active={tab === "source"} onclick={() => (tab = "source")}>Nguồn</button>
-    <button class:active={tab === "preset"} onclick={() => (tab = "preset")} disabled={!project}>Preset</button>
-    <button class:active={tab === "run"} onclick={() => (tab = "run")} disabled={!project}>Chạy</button>
+    <button class:active={tab === "source"} onclick={() => navigate("source")} disabled={runBusy || sourceBusy}>Nguồn</button>
+    <button class:active={tab === "preset"} onclick={() => navigate("preset")} disabled={!project || runBusy || sourceBusy}>Preset</button>
+    <button class:active={tab === "run"} onclick={() => navigate("run")} disabled={!project || runBusy || sourceBusy}>Chạy</button>
   </nav>
   <span class="conn" class:on={status.connected}>{status.connected ? "● Extension" : "○ Extension"}</span>
 </header>
 <main>
-  {#if tab === "source"}<SourceTab {project} {toast} />
-  {:else if tab === "preset" && project}{#key project.imageDir}<PresetTab {project} {toast} />{/key}
-  {:else if tab === "run" && project}<RunTab {project} {status} {toast} />{/if}
+  {#if tab === "source"}<SourceTab {project} {toast} beforeNavigate={() => beforeNavigate(true)} onBusyChange={(busy) => (sourceBusy = busy)} />
+  {:else if tab === "preset" && project}{#key project.imageDir}<PresetTab bind:this={presetEditor} {project} {toast} locked={navigating} />{/key}
+  {:else if tab === "run" && project}<RunTab {project} {status} {toast} onBusyChange={(busy) => (runBusy = busy)} />{/if}
 </main>
 <div class="toasts">{#each toasts as t (t.id)}<div class="toast">{t.text}</div>{/each}</div>
 

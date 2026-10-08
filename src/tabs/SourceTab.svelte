@@ -6,17 +6,30 @@
   import type { Project, Row } from "../lib/types";
   import RowPanel from "../components/RowPanel.svelte";
 
-  let { project, toast }: { project: Project | null; toast: (t: string) => void } = $props();
+  let { project, toast, beforeNavigate = async () => {}, onBusyChange = () => {} }: { project: Project | null; toast: (t: string) => void; beforeNavigate?: () => Promise<void>; onBusyChange?: (busy: boolean) => void } = $props();
+  let opening = $state(false);
   let selected: Row | null = $state(null);
   let common = $state("");
   let pasteText = $state("");
   let pasteFrom = $state(1);
   let showPaste = $state(false);
   $effect(() => { common = project?.commonPrompt ?? ""; });
+  let selectedProject: string | undefined;
+  $effect(() => {
+    const imageDir = project?.imageDir;
+    if (selectedProject !== imageDir) { selected = null; selectedProject = imageDir; }
+  });
 
   async function pickFolder() {
-    const dir = await open({ directory: true, title: "Chọn folder ảnh" });
-    if (typeof dir === "string") await api.openProject(dir).catch(toast);
+    if (opening) return;
+    opening = true;
+    onBusyChange(true);
+    try {
+      await beforeNavigate();
+      const dir = await open({ directory: true, title: "Chọn folder ảnh" });
+      if (typeof dir === "string") await api.openProject(dir);
+    } catch (e) { toast(String(e)); }
+    finally { opening = false; onBusyChange(false); }
   }
   async function importTable() {
     const f = await open({ filters: [{ name: "Bảng", extensions: ["xlsx", "csv"] }] });
@@ -35,7 +48,7 @@
 </script>
 
 <div class="bar">
-  <button class="primary" onclick={pickFolder}>Chọn folder ảnh</button>
+  <button class="primary" onclick={pickFolder} disabled={opening}>Chọn folder ảnh</button>
   <button onclick={importTable} disabled={!project}>Nhập CSV/Excel</button>
   <button onclick={() => (showPaste = !showPaste)} disabled={!project}>Dán nhiều prompt</button>
   <input class="grow" placeholder="Prompt chung cho các dòng chưa có prompt riêng" bind:value={common} onchange={() => api.setCommonPrompt(common)} disabled={!project} />
@@ -69,7 +82,7 @@
     </table>
     </div>
     {#if selected}
-      {#key selected.stt}<RowPanel {project} row={selected} onclose={() => (selected = null)} />{/key}
+      {#key `${project.imageDir}:${selected.stt}`}<RowPanel {project} row={selected} {toast} onclose={() => (selected = null)} />{/key}
     {/if}
   </div>
 {:else}

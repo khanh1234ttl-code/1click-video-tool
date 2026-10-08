@@ -5,36 +5,39 @@
   import { resolutionFor, statusLabel } from "../lib/textLayout";
   import type { Project, Status } from "../lib/types";
 
-  let { project, status, toast }: { project: Project; status: Status; toast: (t: string) => void } = $props();
+  let { project, status, toast, onBusyChange = () => {} }: { project: Project; status: Status; toast: (t: string) => void; onBusyChange?: (busy: boolean) => void } = $props();
   let picked = $state(new Set<number>());
   let busy = $state(false);
   const failed = $derived(project.rows.filter((r) => r.status.state === "failed").map((r) => r.stt));
   const doneCount = $derived(project.rows.filter((r) => r.status.state === "done").length);
 
-  async function renderOverlays(stts: number[]) {
-    const { w, h } = resolutionFor(project.preset.gen);
+  async function renderOverlays(snapshot: Project, stts: number[]) {
+    const { w, h } = resolutionFor(snapshot.preset.gen);
     const items = [];
-    for (const row of project.rows.filter((r) => stts.includes(r.stt))) {
-      items.push({ stt: row.stt, pngBase64: await renderOverlayPng(row.textOverride ?? project.preset.text, row.text, w, h) });
+    for (const row of snapshot.rows.filter((r) => stts.includes(r.stt))) {
+      items.push({ stt: row.stt, pngBase64: await renderOverlayPng(row.textOverride ?? snapshot.preset.text, row.text, w, h) });
     }
     await api.saveOverlays(items);
   }
-  async function act(f: () => Promise<void>) {
+  async function act(f: (snapshot: Project) => Promise<void>) {
+    if (busy) return;
+    const snapshot = structuredClone($state.snapshot(project));
     busy = true;
-    try { await f(); } catch (e) { toast(String(e)); } finally { busy = false; }
+    onBusyChange(true);
+    try { await f(snapshot); } catch (e) { toast(String(e)); } finally { busy = false; onBusyChange(false); }
   }
-  const start = () => act(async () => {
-    await renderOverlays(project.rows.filter((r) => r.status.state === "pending").map((r) => r.stt));
+  const start = () => act(async (snapshot) => {
+    await renderOverlays(snapshot, snapshot.rows.filter((r) => r.status.state === "pending").map((r) => r.stt));
     await api.startRun();
   });
   // Rows failed at generation/download go back to Pending, so start them right away;
   // startRun rejects when only post-processing retries remain, which is fine.
-  const retry = (stts: number[]) => act(async () => {
-    await renderOverlays(stts);
+  const retry = (stts: number[]) => act(async (snapshot) => {
+    await renderOverlays(snapshot, stts);
     await api.retryRows(stts);
     if (status.connected) await api.startRun().catch(() => {});
   });
-  const reprocess = (stts: number[]) => act(async () => { await renderOverlays(stts); await api.reprocessRows(stts); });
+  const reprocess = (stts: number[]) => act(async (snapshot) => { await renderOverlays(snapshot, stts); await api.reprocessRows(stts); });
   async function pickFfmpeg() {
     const dir = await open({ directory: true, title: "Chọn thư mục chứa ffmpeg.exe" });
     if (typeof dir === "string") await api.setFfmpegDir(dir).catch(toast);
@@ -50,7 +53,7 @@
   <span class="grow"></span>
   <span>{doneCount}/{project.rows.length} xong</span>
   <button class="primary" disabled={busy || status.running || !status.connected} onclick={start}>Bắt đầu</button>
-  <button disabled={!status.running} onclick={() => act(api.pauseRun)}>Tạm dừng</button>
+  <button disabled={busy || !status.running} onclick={() => act(api.pauseRun)}>Tạm dừng</button>
   <button disabled={!failed.length || busy} onclick={() => retry(failed)}>Thử lại {failed.length} dòng lỗi</button>
   <button disabled={!picked.size || busy} onclick={() => reprocess([...picked])}>Chỉ hậu kỳ lại ({picked.size})</button>
   <button onclick={() => api.openPath(project.preset.output.folder ?? `${project.imageDir}\\Output`)}>Mở folder Output</button>

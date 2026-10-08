@@ -1,12 +1,15 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onDestroy, onMount } from "svelte";
   import { api } from "../lib/api";
   import { resolutionFor } from "../lib/textLayout";
   import type { Project, Row } from "../lib/types";
   import TextPreview from "./TextPreview.svelte";
   import TextStyleEditor from "./TextStyleEditor.svelte";
 
-  let { project, row, onclose }: { project: Project; row: Row; onclose: () => void } = $props();
+  let { project, row, onclose, toast }: { project: Project; row: Row; onclose: () => void; toast: (t: string) => void } = $props();
+  const imageDir = project.imageDir;
+  let live = true;
+  onDestroy(() => { live = false; });
   let prompt = $state(row.prompt);
   let text = $state(row.text);
   let music = $state(row.music ?? "");
@@ -17,8 +20,10 @@
   onMount(async () => (tracks = await api.listMusic()));
 
   async function save() {
-    await api.updateRow({ stt: row.stt, prompt, text, music: music || null, textOverride: own ? style : null });
-    onclose();
+    try {
+      await api.updateRow({ stt: row.stt, prompt, text, music: music || null, textOverride: own ? $state.snapshot(style) : null }, imageDir);
+      if (live) onclose();
+    } catch (e) { if (live) toast(String(e)); }
   }
 </script>
 
