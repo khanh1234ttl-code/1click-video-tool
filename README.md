@@ -18,7 +18,7 @@ Làm video hàng loạt trên Windows: folder ảnh + prompt → extension Vids 
 
 1. **Nguồn**: chọn folder ảnh → nhập prompt bằng cách sửa trong bảng, **Dán nhiều prompt**, **Prompt chung**, hoặc **Nhập CSV/Excel** với các cột `anh, prompt, text, nhac`. Bấm một dòng để đặt text, nhạc và vị trí riêng.
 2. **Preset**: chọn chế độ tạo (ảnh làm khung hình đầu / ảnh tham chiếu), tỉ lệ, chất lượng và số luồng. Chỉnh kiểu chữ, kéo thả vị trí text trên khung xem trước; chọn folder nhạc, chế độ nhạc (ngẫu nhiên / lần lượt / gán), âm lượng và fade. Chọn folder Output nếu muốn đổi nơi lưu. Lưu preset theo tên để dùng lại.
-3. **Chạy**: bấm **Bắt đầu**. Tab Google Vids có thể để ẩn. Theo dõi trạng thái `Chờ → Đang gửi → Render n% → Đã tải → Hậu kỳ → Xong`. **Tạm dừng** hủy job đang chạy trên extension: dòng đang gửi/render trở về **Chờ** (bấm **Bắt đầu** để chạy lại, sẽ tốn lượt Veo), dòng đang hậu kỳ chuyển lỗi, dùng **Chỉ hậu kỳ lại**. Dòng lỗi → **Thử lại**. Sau khi sửa text hoặc nhạc, chọn dòng rồi bấm **Chỉ hậu kỳ lại** để xử lý từ video gốc, không tốn lượt Veo.
+3. **Chạy**: bấm **Bắt đầu**. Tab Google Vids có thể để ẩn. Theo dõi trạng thái `Chờ → Đang gửi → Render n% → Đã tải → Hậu kỳ → Xong`. **Dừng** hủy job đang chạy trên extension: dòng đang gửi/render trở về **Chờ** (bấm **Bắt đầu** để chạy lại, sẽ tốn lượt Veo), dòng đang hậu kỳ chuyển lỗi, dùng **Chỉ hậu kỳ lại**. Dòng lỗi → **Thử lại**. Sau khi sửa text hoặc nhạc, chọn dòng rồi bấm **Chỉ hậu kỳ lại** để xử lý từ video gốc, không tốn lượt Veo.
 
 Text hiển thị suốt video. Nhạc nền được trộn dưới âm gốc của video Veo: **Âm lượng nhạc** chỉnh độ lớn nhạc, **Âm gốc** chỉnh tiếng Veo (0% = tắt hẳn, kể cả khi không có nhạc).
 
@@ -29,7 +29,7 @@ Dữ liệu dự án và video gốc nằm trong `<folder ảnh>\_1click\`. Tắ
 ## Lưu ý
 
 - Tạo video và thử lại lỗi tạo/tải video dùng lượt Veo của tài khoản Google. Khi thử cấu hình mới, nên bắt đầu với ít ảnh.
-- Ba dòng lỗi liên tiếp → tool tự tạm dừng; có thể tài khoản đã hết lượt tạo Veo trong ngày. Kiểm tra lý do lỗi trước khi thử lại.
+- Ba dòng lỗi liên tiếp → tool tự dừng; có thể tài khoản đã hết lượt tạo Veo trong ngày. Kiểm tra lý do lỗi trước khi thử lại.
 - Thiếu `ffmpeg.exe` hoặc `ffprobe.exe` thì **Bắt đầu** báo lỗi ngay, trước khi gửi prompt nào.
 - Lỗi hậu kỳ: kiểm tra FFmpeg, text và nhạc, rồi dùng **Chỉ hậu kỳ lại**.
 - Veo dùng ảnh làm khung đầu nhưng có thể vẽ lại một số chi tiết; bố cục được giữ. Video Veo có dấu ✦ ở góc dưới phải.

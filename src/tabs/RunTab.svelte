@@ -61,7 +61,7 @@
   <span class="grow"></span>
   <span>{doneCount}/{project.rows.length} xong</span>
   <button class="primary" disabled={busy || status.running || !status.connected} onclick={start}>Bắt đầu</button>
-  <button disabled={pausing || !status.running} onclick={pauseRun}>Tạm dừng</button>
+  <button disabled={pausing || !status.running} onclick={pauseRun} title="Hủy các video đang tạo; dòng chưa xong về Chờ">Dừng</button>
   <button disabled={!failed.length || busy} onclick={() => retry(failed)}>Thử lại {failed.length} dòng lỗi</button>
   <button disabled={!picked.size || busy} onclick={() => reprocess([...picked])}>Chỉ hậu kỳ lại ({picked.size})</button>
   <button onclick={() => api.openPath(project.preset.output.folder ?? `${project.imageDir}\\Output`)}>Mở folder Output</button>

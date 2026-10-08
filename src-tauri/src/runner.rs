@@ -102,7 +102,7 @@ impl Runner {
             self.running = false;
             self.reset_active(Some(job_id));
             fx.push(Effect::Send(ToExt::JobCancel { job_id: job_id.to_string() }));
-            fx.push(Effect::Notify("3 dòng lỗi liên tiếp — đã tạm dừng. Có thể đã hết lượt tạo Veo hôm nay.".into()));
+            fx.push(Effect::Notify("3 dòng lỗi liên tiếp — đã dừng. Có thể đã hết lượt tạo Veo hôm nay.".into()));
         }
         self.refresh_running();
         fx.extend([Effect::Save, Effect::Changed]);
@@ -198,7 +198,7 @@ impl Runner {
         self.importing.clear();
         for r in &mut self.project.rows {
             if matches!(r.status, RowStatus::Downloaded | RowStatus::PostProcessing) {
-                r.status = RowStatus::Failed { stage: Stage::PostProcess, message: "Đã tạm dừng hậu kỳ".into() };
+                r.status = RowStatus::Failed { stage: Stage::PostProcess, message: "Đã dừng hậu kỳ".into() };
             }
         }
         self.running = false;

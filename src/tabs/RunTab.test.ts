@@ -72,18 +72,18 @@ beforeEach(() => {
 });
 afterEach(async () => { if (instance) await unmount(instance); target.remove(); });
 
-describe("Pause while Start is still preparing", () => {
-  it("keeps Pause usable and calls pause_run while start_run is pending", async () => {
+describe("Stop (Dừng) while Start is still preparing", () => {
+  it("keeps Dừng usable and calls pause_run while start_run is pending", async () => {
     await startPending();
-    expect(button("Tạm dừng").disabled).toBe(false);
-    button("Tạm dừng").click();
+    expect(button("Dừng").disabled).toBe(false);
+    button("Dừng").click();
     await settle();
     expect(calls()).toEqual(["save_overlays", "start_run", "pause_run"]);
   });
 
   it.each([["pause settles first", true], ["start settles first", false]])("keeps navigation locked until start and pause both settle (%s)", async (_label, pauseFirst) => {
     await startPending();
-    button("Tạm dừng").click();
+    button("Dừng").click();
     await settle();
     expect(locked()).toBe(true);
     (pauseFirst ? pause : start).resolve();
@@ -108,9 +108,9 @@ describe("Pause while Start is still preparing", () => {
 
   it("does not send a second pause_run while one is pending", async () => {
     await startPending();
-    button("Tạm dừng").click();
+    button("Dừng").click();
     await settle();
-    button("Tạm dừng").click();
+    button("Dừng").click();
     await settle();
     expect(calls().filter((c) => c === "pause_run")).toHaveLength(1);
   });
