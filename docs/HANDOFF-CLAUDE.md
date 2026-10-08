@@ -18,22 +18,21 @@ Ngày 08/10/2026, Claude Code đã làm xong Tasks 3–8. Nhánh `feat/video-too
   - Vite dev từng crash vì EBUSY dưới `.superpowers/`; đã cho bỏ qua thư mục này.
 - **Task 8**: README cập nhật theo hành vi đã kiểm chứng (Tạm dừng, âm gốc/nhạc, khôi phục, ffprobe). Bộ cài mới:
   `src-tauri/target/release/bundle/nsis/1Click Video Tool_0.1.0_x64-setup.exe`,
-  **3,132,010 bytes**, SHA256 `8E8502676BE42CD03F280534CA562A8697163EB5AC778E727FA1F51CE0EDC532`, build từ `c5c53bf`.
-  Commit cuối chỉ đổi docs, nên code trong bộ cài giống `c5c53bf`.
+  **3,131,120 bytes**, SHA256 `BE24D97D5BDC3CC05883D62193CA7E3DC893EBA7878287874998311EBE437A38`, build lại sau các sửa Minor (code = `72012d8`).
+- **Sau Task 8** đã sửa 4 Minor, mỗi lỗi có test RED → GREEN:
+  - `f16687b`: bóng chữ khi viền 0;
+  - `9da6943`: "Dán nhiều prompt" điền từ dòng đang chọn;
+  - `169939c`: TOFU atomic;
+  - `72012d8`: dự án bị di chuyển được rebase mọi đường dẫn.
 
 Kiểm chứng cuối (đều exit 0):
-- `cargo test`: unit 87, e2e 2, media_ffmpeg 3.
-- `npm test`: 32/32.
-- `npm run build`, `npx tsc --noEmit`.
+- `cargo test`: unit 90, e2e 2, media_ffmpeg 3.
+- `npm test`: 38/38.
+- `npx tsc --noEmit`.
 - `npm run test:ext`: 11/11.
-- Bridge trong git byte-identical với bản đang cài.
+- `cargo tauri build`.
 
-Minor còn lại (chưa sửa): xem mục "Minor còn lại" trong `docs/reviews/2026-10-08-fix-verification.md`.
-- Dự án bị di chuyển chỉ rebase `image_dir`.
-- "Dán nhiều prompt" luôn bắt đầu từ dòng 1.
-- Bật bóng chữ mà viền 0 thì không có bóng.
-- TOFU có race khi hai handshake đầu đến cùng lúc.
-- Spec có nút Dừng riêng và tên file tùy chỉnh; bản này chưa có.
+Còn để người dùng quyết định: "Tạm dừng" thật (để video đã gửi chạy xong) và mẫu tên đầu ra tùy chỉnh. Xem `docs/reviews/2026-10-08-fix-verification.md`.
 
 Các mục bên dưới là lịch sử của những checkpoint trước, không phải trạng thái hiện tại.
 

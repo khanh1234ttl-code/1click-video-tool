@@ -37,7 +37,7 @@ Không còn Important mở. Hai Minor của review đã sửa thêm ở Task 5 (
 | Bóng chữ không hiện khi viền 0; bóng sót sang lần vẽ sau | `f16687b` | `overlay.test.ts` (4) |
 | "Dán nhiều prompt" luôn từ dòng 1 | `9da6943` | `SourceTab.test.ts` (2) |
 | TOFU: hai handshake đầu đồng thời cùng được chấp nhận | `169939c` | `concurrent_first_handshakes_trust_only_one_extension` |
-| Dự án bị di chuyển chỉ rebase `image_dir` | (commit này) | `moved_project_rebases_paths_inside_the_old_folder`, `moved_project_rebases_mixed_separator_paths` |
+| Dự án bị di chuyển chỉ rebase `image_dir` | `72012d8` | `moved_project_rebases_paths_inside_the_old_folder`, `moved_project_rebases_mixed_separator_paths` |
 
 ## Còn để người dùng quyết định
 - Spec có nút **Tạm dừng** và **Dừng** riêng. Bản này chỉ có một nút "Tạm dừng", hành vi là hủy job (giống Dừng).
