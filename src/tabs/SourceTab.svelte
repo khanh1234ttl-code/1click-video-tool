@@ -50,6 +50,7 @@
 
 {#if project}
   <div class="wrap">
+    <div class="tablewrap">
     <table>
       <thead><tr><th>STT</th><th>Ảnh</th><th>Tên file</th><th>Prompt</th><th>Text</th><th>Nhạc</th><th>Trạng thái</th></tr></thead>
       <tbody>
@@ -66,6 +67,7 @@
         {/each}
       </tbody>
     </table>
+    </div>
     {#if selected}
       {#key selected.stt}<RowPanel {project} row={selected} onclose={() => (selected = null)} />{/key}
     {/if}
@@ -79,7 +81,8 @@
   .paste { align-items: flex-end; } .paste textarea { flex: 1; }
   .grow { flex: 1; }
   .wrap { display: flex; height: calc(100vh - 170px); }
-  table { flex: 1; border-collapse: collapse; background: var(--panel); display: block; overflow-y: auto; }
+  .tablewrap { flex: 1; min-width: 0; overflow: auto; background: var(--panel); }
+  table { width: 100%; border-collapse: collapse; }
   th, td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: left; }
   th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 600; }
   tr { cursor: pointer; } tr.sel { background: #eaf1ff; }
