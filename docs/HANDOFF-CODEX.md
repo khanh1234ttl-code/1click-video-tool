@@ -106,7 +106,7 @@ for the user. Do not merge or push without the user's OK.
 - Repo uses `core.autocrlf=false`; `.superpowers/` is git-ignored.
 - `scripts/extract-plan-block.py PLAN "MARKER" OUT` copies the first fenced code block after a
   marker line of the plan into a file — used for every task so far to avoid transcription errors.
-  Example: `python -I scripts/extract-plan-block.py "../docs/superpowers/plans/2026-10-08-1click-video-tool.md" "**Step 3: Implement \`oneclick-bridge.js\`" out.js`
+  Example: `python -I scripts/extract-plan-block.py "../docs/superpowers/plans/2026-10-08-1click-video-tool.md" "**Step 3: Implement \`assets/oneclick-bridge.js\`**" out.js`
   (match the marker text exactly as it appears in the plan).
 - **Driving the real app** (screenshots + JS inside the Tauri window):
   1. `WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS="--remote-debugging-port=9333" cargo tauri dev` (background).
