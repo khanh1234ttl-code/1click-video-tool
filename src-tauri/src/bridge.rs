@@ -191,12 +191,15 @@ impl Bridge {
     }
 
     async fn serve(&self, stream: TcpStream, events: mpsc::UnboundedSender<BridgeEvent>) {
-        let allowed = self.allowed_id();
         let mut ext_id: Option<String> = None;
+        // Trust on first use is decided at handshake time under one lock, so two first
+        // handshakes racing each other cannot both be accepted.
         let check = |req: &Request, resp: Response| -> Result<Response, ErrorResponse> {
             let origin = req.headers().get("origin").and_then(|v| v.to_str().ok());
-            match extension_id_from_origin(origin) {
-                Some(id) if allowed.as_ref().map_or(true, |a| *a == id) => {
+            let id = extension_id_from_origin(origin);
+            let trusted = id.as_ref().is_some_and(|id| self.inner.allowed.lock().unwrap().get_or_insert_with(|| id.clone()) == id);
+            match id {
+                Some(id) if trusted => {
                     ext_id = Some(id);
                     Ok(resp)
                 }
@@ -209,7 +212,6 @@ impl Bridge {
         };
         let Ok(ws) = tokio_tungstenite::accept_hdr_async(stream, check).await else { return };
         let ext_id = ext_id.expect("set by the accepted handshake");
-        self.inner.allowed.lock().unwrap().get_or_insert_with(|| ext_id.clone());
 
         let (mut sink, mut source) = ws.split();
         let (tx, mut rx) = mpsc::unbounded_channel::<Message>();
@@ -315,6 +317,25 @@ mod tests {
         drop(ws);
         assert_eq!(events.recv().await.unwrap(), BridgeEvent::Disconnected);
         assert!(!bridge.is_connected());
+    }
+
+    #[tokio::test]
+    async fn concurrent_first_handshakes_trust_only_one_extension() {
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let addr = listener.local_addr().unwrap();
+        let (bridge, _events) = Bridge::start(listener, None).await;
+        // Both sockets are accepted while nothing is trusted yet; only then do their handshakes arrive.
+        let first = TcpStream::connect(addr).await.unwrap();
+        let second = TcpStream::connect(addr).await.unwrap();
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let handshake = |stream: TcpStream, origin: &str| {
+            let mut req = format!("ws://{addr}").into_client_request().unwrap();
+            req.headers_mut().insert("Origin", origin.parse().unwrap());
+            async move { tokio_tungstenite::client_async(req, stream).await.map(|(ws, _)| ws) }
+        };
+        let _trusted = handshake(first, "chrome-extension://abc").await.expect("first extension is trusted");
+        assert!(handshake(second, "chrome-extension://zzz").await.is_err(), "a second extension must not slip in");
+        assert_eq!(bridge.allowed_id().as_deref(), Some("abc"));
     }
 
     #[tokio::test]
