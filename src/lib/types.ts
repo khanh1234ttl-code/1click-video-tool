@@ -3,7 +3,7 @@ export type TextAlign = "left" | "center" | "right";
 export type MusicMode = "random" | "sequential" | "assigned";
 export type Stage = "generate" | "download" | "postProcess";
 
-export interface GenSettings { mode: GenMode; aspectRatio: "16:9" | "9:16"; quality: "720p" | "1080p"; concurrency: number; maxRetries: number }
+export interface GenSettings { mode: GenMode; aspectRatio: "16:9" | "9:16"; quality: "720p" | "1080p"; concurrency: number; maxRetries: number; autoPostProcess: boolean }
 export interface TextStyle {
   fontFamily: string; fontFile: string | null; fontSize: number; bold: boolean; color: string;
   strokeColor: string; strokeWidth: number; shadow: boolean; boxEnabled: boolean; boxColor: string;
@@ -15,7 +15,7 @@ export interface Preset { gen: GenSettings; text: TextStyle; music: MusicSetting
 
 export type RowStatus =
   | { state: "pending" } | { state: "sending" } | { state: "rendering"; percent: number }
-  | { state: "downloaded" } | { state: "postProcessing" } | { state: "done" }
+  | { state: "downloaded" } | { state: "generated" } | { state: "postProcessing" } | { state: "done" }
   | { state: "failed"; stage: Stage; message: string };
 
 export interface Row {

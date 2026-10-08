@@ -56,6 +56,7 @@ export function statusLabel(s: RowStatus): string {
     case "sending": return "Đang gửi";
     case "rendering": return `Render ${s.percent}%`;
     case "downloaded": return "Đã tải";
+    case "generated": return "Đã tạo";
     case "postProcessing": return "Hậu kỳ";
     case "done": return "Xong";
     case "failed": return STAGE[s.stage] ?? "Lỗi";

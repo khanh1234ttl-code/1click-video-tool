@@ -34,10 +34,16 @@ describe("layoutBlock", () => {
 
 describe("helpers", () => {
   it("resolution matches the Rust model", () => {
-    expect(resolutionFor({ mode: "imageToVideo", aspectRatio: "9:16", quality: "1080p", concurrency: 1, maxRetries: 1 })).toEqual({ w: 1080, h: 1920 });
+    expect(resolutionFor({ mode: "imageToVideo", aspectRatio: "9:16", quality: "1080p", concurrency: 1, maxRetries: 1, autoPostProcess: false })).toEqual({ w: 1080, h: 1920 });
   });
   it("labels statuses in Vietnamese", () => {
     expect(statusLabel({ state: "rendering", percent: 45 })).toBe("Render 45%");
     expect(statusLabel({ state: "failed", stage: "postProcess", message: "x" })).toBe("Lỗi hậu kỳ");
+  });
+});
+
+describe("statusLabel", () => {
+  it("labels a generated row Đã tạo", () => {
+    expect(statusLabel({ state: "generated" })).toBe("Đã tạo");
   });
 });
