@@ -146,6 +146,9 @@ impl Runner {
         }
     }
 
+    /// The copy worker exited without a durable completion; allow job.query replay to claim it again.
+    pub(crate) fn release_import(&mut self, stt: u32) { self.importing.remove(&stt); }
+
     pub fn on_raw_ready(&mut self, stt: u32, result: Result<PathBuf, String>) -> Vec<Effect> {
         self.importing.remove(&stt);
         let Some(r) = self.project.row_mut(stt) else { return vec![] };

@@ -31,6 +31,7 @@ pub(super) struct TestHooks {
     pub(super) imports: AtomicUsize,
     pub(super) processes: AtomicUsize,
     pub(super) finished: Semaphore,
+    pub(super) fs_faults: Mutex<std::collections::BTreeSet<FileAction>>,
 }
 impl Default for TestHooks {
     fn default() -> Self {
@@ -39,6 +40,7 @@ impl Default for TestHooks {
             imports: AtomicUsize::new(0),
             processes: AtomicUsize::new(0),
             finished: Semaphore::new(0),
+            fs_faults: Mutex::new(std::collections::BTreeSet::new()),
         }
     }
 }
@@ -444,7 +446,8 @@ async fn review_terminal_failure_during_import_cannot_resurrect_or_block_new_job
         file_path: raw.to_string_lossy().into(),
     }));
     assert!(
-        fx.1.iter().any(|f| matches!(f, Effect::ImportRaw { .. })),
+        fx.1.iter()
+            .any(|f| matches!(f, OwnedEffect::ImportRaw { .. })),
         "old import claim blocked a new job"
     );
 }
@@ -452,7 +455,7 @@ async fn review_terminal_failure_during_import_cannot_resurrect_or_block_new_job
 async fn review_raw_publication_save_failure_restores_previous_file() {
     let (tmp, e, dir) = fixture().await;
     let raw = video(tmp.path());
-    let rawdir = dir.join("_1click/raw");
+    let rawdir = dir.join("_1click").join("raw");
     std::fs::create_dir(&rawdir).unwrap();
     let final_path = rawdir.join("001.mp4");
     std::fs::write(&final_path, b"previous raw").unwrap();
@@ -494,13 +497,363 @@ async fn review_local_completion_emits_running_false_without_bridge_message() {
     let g = e.test_hooks.block(Boundary::Process);
     e.reprocess(&[1]).await;
     reached(&g).await;
-    let running_before=e.status().running;
-    let status_before=statuses.lock().unwrap().last().copied();
+    let running_before = e.status().running;
+    let status_before = statuses.lock().unwrap().last().copied();
     g.resume();
     finished(&e).await;
     assert_eq!(e.project().unwrap().rows[0].status, RowStatus::Done);
     assert!(running_before);
-    assert_eq!(status_before,Some(true));
+    assert_eq!(status_before, Some(true));
     assert!(!e.status().running);
     assert_eq!(statuses.lock().unwrap().last(), Some(&false));
+}
+
+#[tokio::test]
+async fn repair_delayed_download_effect_does_not_adopt_restarted_job() {
+    let (tmp, e, _) = fixture().await;
+    let raw = video(tmp.path());
+    e.edit(|p| {
+        p.common_prompt = "prompt".into();
+        p.rows[0].status = RowStatus::Sending;
+        p.rows[0].job_id = Some("old".into())
+    })
+    .unwrap();
+    let delayed = e.effects_for(BridgeEvent::Message(FromExt::ItemDownloaded {
+        job_id: "old".into(),
+        index: 1,
+        file_path: raw.to_string_lossy().into(),
+    }));
+    e.pause().await;
+    let _new = e.start_effects().unwrap();
+    let claims = e.state.lock().unwrap().operations.clone();
+    e.apply(delayed).await;
+    assert_eq!(
+        e.state.lock().unwrap().operations,
+        claims,
+        "old download replaced new job ownership"
+    );
+}
+#[tokio::test]
+async fn repair_delayed_download_after_terminal_failure_does_not_adopt_new_job() {
+    let (tmp, e, _) = fixture().await;
+    let raw = video(tmp.path());
+    e.edit(|p| {
+        p.common_prompt = "prompt".into();
+        p.rows[0].status = RowStatus::Sending;
+        p.rows[0].job_id = Some("old".into())
+    })
+    .unwrap();
+    let delayed = e.effects_for(BridgeEvent::Message(FromExt::ItemDownloaded {
+        job_id: "old".into(),
+        index: 1,
+        file_path: raw.to_string_lossy().into(),
+    }));
+    e.effects_for(BridgeEvent::Message(FromExt::ItemFailed {
+        job_id: "old".into(),
+        index: 1,
+        error: "failed".into(),
+    }));
+    e.retry(&[1]).await;
+    let _new = e.start_effects().unwrap();
+    let claims = e.state.lock().unwrap().operations.clone();
+    e.apply(delayed).await;
+    assert_eq!(
+        e.state.lock().unwrap().operations,
+        claims,
+        "old terminal job replaced new ownership"
+    );
+}
+#[tokio::test]
+async fn repair_delayed_postprocess_cannot_restart_canceled_work() {
+    let (tmp, e, _) = fixture().await;
+    let raw = video(tmp.path());
+    e.edit(|p| {
+        p.rows[0].raw_video = Some(raw);
+        p.rows[0].status = RowStatus::Done
+    })
+    .unwrap();
+    let delayed = e.with_runner(|r| r.reprocess(&[1]));
+    e.pause().await;
+    let before = e.project().unwrap();
+    let claims = e.state.lock().unwrap().operations.clone();
+    e.apply(delayed).await;
+    assert_eq!(
+        e.project().unwrap(),
+        before,
+        "delayed postprocess restarted paused work"
+    );
+    assert_eq!(e.state.lock().unwrap().operations, claims);
+}
+#[tokio::test]
+async fn repair_delayed_submit_cannot_replace_new_encoder_claim() {
+    let (_tmp, e, _dir, mut ws, _) = connected_fixture().await;
+    let delayed = e.start_effects().unwrap();
+    e.pause().await;
+    let gate = e.test_hooks.block(Boundary::Encode);
+    let e2 = e.clone();
+    let task = tokio::spawn(async move { e2.start().await });
+    reached(&gate).await;
+    let claims = e.state.lock().unwrap().operations.clone();
+    e.apply(delayed).await;
+    let after = e.state.lock().unwrap().operations.clone();
+    gate.resume();
+    task.await.unwrap().unwrap();
+    e.bridge.send(&ToExt::JobQuery {
+        job_id: "fence".into(),
+    });
+    let mut submits = 0;
+    loop {
+        let m: serde_json::Value =
+            serde_json::from_str(&ws.next().await.unwrap().unwrap().into_text().unwrap()).unwrap();
+        if m["jobId"] == "fence" {
+            break;
+        }
+        if m["type"] == "job.submit" {
+            submits += 1;
+        }
+    }
+    assert_eq!(after, claims, "old Submit replaced new encoder ownership");
+    assert_eq!(submits, 1);
+}
+#[tokio::test]
+async fn repair_failed_import_completion_can_replay_query_without_generation() {
+    let (tmp, e, dir) = fixture().await;
+    let raw = video(tmp.path());
+    e.edit(|p| {
+        p.rows[0].status = RowStatus::Sending;
+        p.rows[0].job_id = Some("job".into())
+    })
+    .unwrap();
+    let g = e.test_hooks.block(Boundary::Import);
+    let msg = || {
+        BridgeEvent::Message(FromExt::ItemDownloaded {
+            job_id: "job".into(),
+            index: 1,
+            file_path: raw.to_string_lossy().into(),
+        })
+    };
+    e.clone().on_bridge_event(msg()).await;
+    reached(&g).await;
+    fail_saves(&dir);
+    g.resume();
+    finished(&e).await;
+    std::fs::remove_dir(dir.join("_1click/project.json.tmp")).unwrap();
+    let retry = e.effects_for(BridgeEvent::Message(FromExt::JobStatus {
+        job_id: "job".into(),
+        known: true,
+        done: vec![crate::bridge::DoneItem {
+            index: 1,
+            file_path: raw.to_string_lossy().into(),
+        }],
+        failed: vec![],
+        pending: vec![],
+    }));
+    assert!(
+        !retry.1.is_empty(),
+        "completed worker left importing guard claimed forever"
+    );
+    *e.test_hooks.gate.lock().unwrap() = None;
+    e.apply(retry).await;
+    finished(&e).await;
+    finished(&e).await;
+    assert_eq!(e.project().unwrap().rows[0].status, RowStatus::Done);
+    assert_eq!(e.project().unwrap().rows[0].job_id.as_deref(), Some("job"));
+}
+#[tokio::test]
+async fn repair_failed_postprocess_completion_can_reprocess_without_generation() {
+    let (tmp, e, dir) = fixture().await;
+    let raw = video(tmp.path());
+    e.edit(|p| {
+        p.rows[0].raw_video = Some(raw);
+        p.rows[0].status = RowStatus::Done
+    })
+    .unwrap();
+    let g = e.test_hooks.block(Boundary::Process);
+    e.reprocess(&[1]).await;
+    reached(&g).await;
+    fail_saves(&dir);
+    g.resume();
+    finished(&e).await;
+    std::fs::remove_dir(dir.join("_1click/project.json.tmp")).unwrap();
+    let retry = e.with_runner(|r| r.reprocess(&[1]));
+    assert!(
+        !retry.1.is_empty(),
+        "completed worker left PostProcessing permanently ineligible"
+    );
+    e.apply(retry).await;
+    finished(&e).await;
+    assert_eq!(e.project().unwrap().rows[0].status, RowStatus::Done);
+    assert!(e.project().unwrap().rows[0].job_id.is_none());
+}
+
+async fn publication_fixture() -> (
+    tempfile::TempDir,
+    Arc<Engine>,
+    PathBuf,
+    Operation,
+    PathBuf,
+    PathBuf,
+) {
+    let (tmp, e, dir) = fixture().await;
+    e.edit(|p| {
+        p.rows[0].status = RowStatus::Sending;
+        p.rows[0].job_id = Some("job".into())
+    })
+    .unwrap();
+    let fx = e.effects_for(BridgeEvent::Message(FromExt::ItemDownloaded {
+        job_id: "job".into(),
+        index: 1,
+        file_path: "unused".into(),
+    }));
+    let op =
+        fx.1.into_iter()
+            .find_map(|fx| {
+                if let OwnedEffect::ImportRaw { op, .. } = fx {
+                    Some(op)
+                } else {
+                    None
+                }
+            })
+            .unwrap();
+    let rawdir = dir.join("_1click").join("raw");
+    std::fs::create_dir(&rawdir).unwrap();
+    let final_path = rawdir.join("001.mp4");
+    std::fs::write(&final_path, b"old raw").unwrap();
+    let temp = Engine::temporary(&op, &rawdir);
+    std::fs::write(&temp, b"new raw").unwrap();
+    (tmp, e, dir, op, temp, final_path)
+}
+fn failure_messages(e: &Engine, fx: Effects) -> String {
+    let mut text =
+        fx.1.into_iter()
+            .filter_map(|fx| {
+                if let OwnedEffect::Notify(t) = fx {
+                    Some(t)
+                } else {
+                    None
+                }
+            })
+            .collect::<Vec<_>>()
+            .join(" ");
+    if let RowStatus::Failed { message, .. } = &e.project().unwrap().rows[0].status {
+        text.push_str(message);
+    }
+    text
+}
+#[tokio::test]
+async fn repair_failed_publish_restore_reports_and_preserves_backup() {
+    let (_tmp, e, _dir, op, temp, final_path) = publication_fixture().await;
+    let backup = final_path.with_extension("mp4.backup");
+    e.test_hooks
+        .fs_faults
+        .lock()
+        .unwrap()
+        .extend([FileAction::Publish, FileAction::Restore]);
+    let fx = e.finish_operation(&op, Ok(temp));
+    let message = failure_messages(&e, fx);
+    assert_eq!(std::fs::read(&backup).unwrap(), b"old raw");
+    assert!(
+        message.contains(&backup.to_string_lossy().to_string()),
+        "backup path hidden: {message}"
+    );
+    assert!(
+        message.contains("Restore"),
+        "rollback error hidden: {message}"
+    );
+    assert!(!final_path.exists());
+}
+#[tokio::test]
+async fn repair_failed_rollback_remove_reports_and_preserves_backup() {
+    let (_tmp, e, dir, op, temp, final_path) = publication_fixture().await;
+    let backup = final_path.with_extension("mp4.backup");
+    fail_saves(&dir);
+    e.test_hooks
+        .fs_faults
+        .lock()
+        .unwrap()
+        .insert(FileAction::RemovePublished);
+    let fx = e.finish_operation(&op, Ok(temp));
+    let message = failure_messages(&e, fx);
+    assert_eq!(std::fs::read(&backup).unwrap(), b"old raw");
+    assert_eq!(std::fs::read(&final_path).unwrap(), b"new raw");
+    assert!(message.contains("RemovePublished"));
+    assert!(message.contains(&backup.to_string_lossy().to_string()));
+}
+#[tokio::test]
+async fn repair_failed_rollback_restore_reports_and_preserves_backup() {
+    let (_tmp, e, dir, op, temp, final_path) = publication_fixture().await;
+    let backup = final_path.with_extension("mp4.backup");
+    fail_saves(&dir);
+    e.test_hooks
+        .fs_faults
+        .lock()
+        .unwrap()
+        .insert(FileAction::Restore);
+    let fx = e.finish_operation(&op, Ok(temp));
+    let message = failure_messages(&e, fx);
+    assert_eq!(std::fs::read(&backup).unwrap(), b"old raw");
+    assert!(!final_path.exists());
+    assert!(message.contains("Restore"));
+    assert!(message.contains(&backup.to_string_lossy().to_string()));
+}
+
+#[tokio::test]
+async fn repair_outstanding_backup_blocks_subsequent_publication() {
+    let (_tmp, e, _dir, op, temp, final_path) = publication_fixture().await;
+    let backup = final_path.with_extension("mp4.backup");
+    std::fs::write(&backup, b"recoverable prior raw").unwrap();
+    let fx = e.finish_operation(&op, Ok(temp));
+    let message = failure_messages(&e, fx);
+    assert_eq!(
+        std::fs::read(&final_path).unwrap(),
+        b"old raw",
+        "published over an unresolved backup"
+    );
+    assert_eq!(std::fs::read(&backup).unwrap(), b"recoverable prior raw");
+    assert!(message.contains(&backup.to_string_lossy().to_string()));
+}
+#[tokio::test]
+async fn repair_failed_backup_cleanup_is_reported_and_protects_future_publish() {
+    let (_tmp, e, _dir, op, temp, final_path) = publication_fixture().await;
+    e.test_hooks
+        .fs_faults
+        .lock()
+        .unwrap()
+        .insert(FileAction::RemoveBackup);
+    let fx = e.finish_operation(&op, Ok(temp));
+    let message = failure_messages(&e, fx);
+    let backup = std::fs::read_dir(final_path.parent().unwrap())
+        .unwrap()
+        .map(|entry| entry.unwrap().path())
+        .find(|p| p.extension().is_some_and(|ext| ext == "backup"))
+        .expect("backup preserved");
+    assert!(message.contains("RemoveBackup"));
+    assert!(message.contains(&backup.to_string_lossy().to_string()));
+    e.edit(|p| {
+        p.rows[0].status = RowStatus::Sending;
+        p.rows[0].job_id = Some("next".into())
+    })
+    .unwrap();
+    let fx = e.effects_for(BridgeEvent::Message(FromExt::ItemDownloaded {
+        job_id: "next".into(),
+        index: 1,
+        file_path: "unused".into(),
+    }));
+    let op =
+        fx.1.into_iter()
+            .find_map(|fx| {
+                if let OwnedEffect::ImportRaw { op, .. } = fx {
+                    Some(op)
+                } else {
+                    None
+                }
+            })
+            .unwrap();
+    let temp = Engine::temporary(&op, final_path.parent().unwrap());
+    std::fs::write(&temp, b"third raw").unwrap();
+    let fx = e.finish_operation(&op, Ok(temp));
+    let message = failure_messages(&e, fx);
+    assert_eq!(std::fs::read(&backup).unwrap(), b"old raw");
+    assert_eq!(std::fs::read(&final_path).unwrap(), b"new raw");
+    assert!(message.contains(&backup.to_string_lossy().to_string()));
 }

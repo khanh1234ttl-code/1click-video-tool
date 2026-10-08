@@ -42,7 +42,16 @@ struct State {
     operations: BTreeMap<u32, u64>,
 }
 
-type Effects = (u64, Vec<Effect>);
+type Effects = (u64, Vec<OwnedEffect>);
+
+/// Engine effects have immutable ownership before leaving the mutation/save transaction.
+enum OwnedEffect {
+    Submit { job_id: String, operations: Vec<Operation> },
+    Send(ToExt),
+    ImportRaw { op: Operation, from: PathBuf },
+    PostProcess(Operation),
+    Notify(String),
+}
 
 #[derive(Clone)]
 struct Operation {
@@ -55,6 +64,9 @@ struct Operation {
     ffmpeg: Option<PathBuf>,
     ffprobe: Option<PathBuf>,
 }
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum FileAction { Publish, Restore, RemovePublished, RemoveBackup }
 
 pub struct Engine {
     state: Mutex<State>,
@@ -162,13 +174,17 @@ impl Engine {
         if self.bridge.is_connected() {
             fx.extend(runner.on_connected());
         }
-        project::save(&runner.project).map_err(|e| e.to_string())?;
-        let p = runner.project.clone();
+        let before = st.runner.clone();
+        let old_epoch = st.epoch;
+        let old_operations = st.operations.clone();
         st.epoch += 1;
         st.operations.clear();
         st.runner = Some(runner);
-        let fx = (st.epoch, fx.into_iter().filter(|f| !matches!(f, Effect::Save | Effect::Changed)).collect());
-        (self.notify)(EngineEvent::Project(p.clone()));
+        let fx = match self.commit_locked(&mut st, before, fx) {
+            Ok(fx) => fx,
+            Err(err) => { st.epoch = old_epoch; st.operations = old_operations; return Err(err); }
+        };
+        let p = st.runner.as_ref().unwrap().project.clone();
         drop(st);
         self.emit_status();
         let me = self.clone();
@@ -217,25 +233,37 @@ impl Engine {
     /// Mutation, snapshot and durable write are one synchronous transaction.
     /// Restore the entire runner on failure, including its transient duplicate/failure guards.
     fn commit_locked(&self, st: &mut State, before: Option<Runner>, fx: Vec<Effect>) -> Result<Effects, String> {
-        if !fx.is_empty() {
+        let before_operations = st.operations.clone();
+        let changed = !fx.is_empty();
+        let owned = self.capture_effects(st, fx);
+        if changed {
             if let Some(r) = st.runner.as_ref() {
                 if let Err(err) = project::save(&r.project) {
                     st.runner = before;
+                    st.operations = before_operations;
                     return Err(format!("Không lưu được dự án: {err}"));
                 }
                 (self.notify)(EngineEvent::Project(r.project.clone()));
             }
         }
-        Ok((st.epoch, fx.into_iter().filter(|f| !matches!(f, Effect::Save | Effect::Changed)).collect()))
+        Ok((st.epoch, owned))
     }
 
     fn commit_or_notify(&self, st: &mut State, before: Option<Runner>, fx: Vec<Effect>) -> Effects {
-        self.commit_locked(st, before, fx).unwrap_or_else(|err| (st.epoch, vec![Effect::Notify(err)]))
+        self.commit_locked(st, before, fx).unwrap_or_else(|err| (st.epoch, vec![OwnedEffect::Notify(err)]))
     }
 
     fn with_runner(&self, f: impl FnOnce(&mut Runner) -> Vec<Effect>) -> Effects {
         let mut st = self.state.lock().unwrap();
         let before = st.runner.clone();
+        // A PostProcessing row without a claim is a completed worker whose save failed.
+        // Rearm it only on the next explicit local action; there is no automatic retry loop.
+        let abandoned: Vec<_> = st.runner.as_ref().map(|r| r.project.rows.iter()
+            .filter(|row| row.status == RowStatus::PostProcessing && !st.operations.contains_key(&row.stt))
+            .map(|row| row.stt).collect()).unwrap_or_default();
+        if let Some(r) = st.runner.as_mut() {
+            for stt in abandoned { r.on_postprocess_done(stt, Err("Lưu kết quả thất bại; có thể hậu kỳ lại".into())); }
+        }
         let fx = st.runner.as_mut().map(f).unwrap_or_default();
         self.commit_or_notify(&mut st, before, fx)
     }
@@ -247,7 +275,7 @@ impl Engine {
             let fx = st.runner.as_mut().map(|r| r.pause()).unwrap_or_default();
             match self.commit_locked(&mut st, before, fx) {
                 Ok(fx) => { st.operations.clear(); fx }
-                Err(err) => (st.epoch, vec![Effect::Notify(err)]),
+                Err(err) => (st.epoch, vec![OwnedEffect::Notify(err)]),
             }
         };
         self.apply(fx).await;
@@ -298,30 +326,47 @@ impl Engine {
                 } else { r.status.is_active() })
     }
 
-    /// Claims queued work before spawning/waiting; all I/O comes from this immutable snapshot.
-    fn claim(&self, epoch: u64, stt: u32, postprocess: bool) -> Option<Operation> {
-        let mut st = self.state.lock().unwrap();
-        if st.epoch != epoch { return None; }
+    /// Called only while the originating mutation transaction still holds the mutex.
+    fn capture_effects(&self, st: &mut State, fx: Vec<Effect>) -> Vec<OwnedEffect> {
+        let mut owned = Vec::new();
+        for effect in fx {
+            match effect {
+                Effect::Save | Effect::Changed => {},
+                Effect::Notify(t) => owned.push(OwnedEffect::Notify(t)),
+                Effect::Send(m) => owned.push(OwnedEffect::Send(m)),
+                Effect::Submit { job_id, stts } => {
+                    // Validate the whole batch before inserting any claim.
+                    let valid = st.runner.as_ref().map_or(false, |r| stts.iter().all(|stt|
+                        r.project.row(*stt).map_or(false, |row| row.status.is_active() && row.job_id.as_deref() == Some(&job_id))));
+                    if valid {
+                        let operations = stts.into_iter().filter_map(|stt| self.claim_locked(st, stt, false)).collect();
+                        owned.push(OwnedEffect::Submit { job_id, operations });
+                    }
+                }
+                Effect::ImportRaw { stt, from } => {
+                    if let Some(op) = self.claim_locked(st, stt, false) { owned.push(OwnedEffect::ImportRaw { op, from }); }
+                }
+                Effect::PostProcess(stt) => {
+                    if let Some(op) = self.claim_locked(st, stt, true) { owned.push(OwnedEffect::PostProcess(op)); }
+                }
+            }
+        }
+        owned
+    }
+
+    fn claim_locked(&self, st: &mut State, stt: u32, postprocess: bool) -> Option<Operation> {
         let row = st.runner.as_ref()?.project.row(stt)?;
         let eligible = if postprocess {
             row.raw_video.is_some() && matches!(row.status, RowStatus::Downloaded | RowStatus::Done | RowStatus::Failed { stage: crate::model::Stage::PostProcess, .. })
         } else { row.status.is_active() };
         if !eligible { return None; }
-        if postprocess {
-            let before = st.runner.clone();
-            let fx = st.runner.as_mut()?.on_postprocess_started(stt);
-            if let Err(err) = self.commit_locked(&mut st, before, fx) {
-                drop(st);
-                (self.notify)(EngineEvent::Toast(err));
-                return None;
-            }
-        }
+        if postprocess { st.runner.as_mut()?.on_postprocess_started(stt); }
         st.next_operation += 1;
         let id = st.next_operation;
         st.operations.insert(stt, id);
         let p = st.runner.as_ref()?.project.clone();
         Some(Operation {
-            epoch, id, stt, job_id: p.row(stt)?.job_id.clone(), postprocess, project: p,
+            epoch: st.epoch, id, stt, job_id: p.row(stt)?.job_id.clone(), postprocess, project: p,
             ffmpeg: media::find_tool("ffmpeg", st.settings.ffmpeg.as_deref()),
             ffprobe: media::find_tool("ffprobe", st.settings.ffprobe.as_deref()),
         })
@@ -331,24 +376,22 @@ impl Engine {
         let me = self.clone();
         Box::pin(async move {
             let (epoch, effects) = effects;
-            let mut queue: VecDeque<Effect> = effects.into();
+            let mut queue: VecDeque<OwnedEffect> = effects.into();
             while let Some(e) = queue.pop_front() {
                 match e {
-                    // Save/Changed are consumed by the originating synchronous transaction.
-                    Effect::Save | Effect::Changed => unreachable!("uncommitted engine effect"),
-                    Effect::Notify(t) => {
+                    OwnedEffect::Notify(t) => {
                         if me.state.lock().unwrap().epoch == epoch { (me.notify)(EngineEvent::Toast(t)); }
                     }
-                    Effect::Send(m) => {
+                    OwnedEffect::Send(m) => {
                         let st = me.state.lock().unwrap();
                         if st.epoch == epoch { me.bridge.send(&m); }
                     }
-                    Effect::Submit { job_id, stts } => {
-                        let (next_epoch, fx) = me.submit(epoch, job_id, stts).await;
+                    OwnedEffect::Submit { job_id, operations } => {
+                        let (next_epoch, fx) = me.submit(epoch, job_id, operations).await;
                         if next_epoch == epoch { queue.extend(fx); }
                     }
-                    Effect::ImportRaw { stt, from } => {
-                        if let Some(op) = me.claim(epoch, stt, false) {
+                    OwnedEffect::ImportRaw { op, from } => {
+                        if Self::operation_matches(&me.state.lock().unwrap(), &op) {
                             let m2 = me.clone();
                             tokio::spawn(async move {
                                 let result = m2.import_raw(&op, from).await;
@@ -360,8 +403,8 @@ impl Engine {
                             });
                         }
                     }
-                    Effect::PostProcess(stt) => {
-                        if let Some(op) = me.claim(epoch, stt, true) {
+                    OwnedEffect::PostProcess(op) => {
+                        if Self::operation_matches(&me.state.lock().unwrap(), &op) {
                             me.emit_status();
                             let m2 = me.clone();
                             tokio::spawn(async move {
@@ -376,13 +419,8 @@ impl Engine {
         })
     }
 
-    async fn submit(self: &Arc<Self>, epoch: u64, job_id: String, stts: Vec<u32>) -> Effects {
-        let mut operations = Vec::new();
-        for stt in stts {
-            let Some(op) = self.claim(epoch, stt, false) else { return (epoch, vec![]); };
-            if op.job_id.as_deref() != Some(&job_id) { return (epoch, vec![]); }
-            operations.push(op);
-        }
+    async fn submit(self: &Arc<Self>, epoch: u64, job_id: String, operations: Vec<Operation>) -> Effects {
+        if !operations.iter().all(|op| Self::operation_matches(&self.state.lock().unwrap(), op)) { return (epoch, vec![]); }
         let Some(first) = operations.first() else { return (epoch, vec![]); };
         let project = first.project.clone();
         let paths: Vec<_> = operations.iter().map(|op| (op.stt, op.project.row(op.stt).unwrap().image_path.clone())).collect();
@@ -486,6 +524,29 @@ impl Engine {
         self.emit_status();
     }
 
+    fn file_action(&self, action: FileAction, from: &Path, to: Option<&Path>) -> std::io::Result<()> {
+        #[cfg(test)]
+        if self.test_hooks.fs_faults.lock().unwrap().remove(&action) {
+            return Err(std::io::Error::other(format!("injected {action:?} failure")));
+        }
+        match action {
+            FileAction::Publish | FileAction::Restore => std::fs::rename(from, to.expect("rename destination")),
+            FileAction::RemovePublished | FileAction::RemoveBackup => std::fs::remove_file(from),
+        }
+    }
+
+    fn rollback_publication(&self, final_path: &Path, backup: Option<&Path>, remove_published: bool) -> Result<(), String> {
+        let describe = |err: std::io::Error| format!("Không khôi phục được {}: {err}. Bản sao cần khôi phục: {}", final_path.display(), backup.map(|p| p.display().to_string()).unwrap_or_else(|| "không có; giữ file hiện tại để kiểm tra".into()));
+        if remove_published {
+            // Do not try to rename over a published file that could not be removed.
+            self.file_action(FileAction::RemovePublished, final_path, None).map_err(&describe)?;
+        }
+        if let Some(backup) = backup {
+            self.file_action(FileAction::Restore, backup, Some(final_path)).map_err(describe)?;
+        }
+        Ok(())
+    }
+
     /// File publication and row publication are serialized with identity checks and persistence.
     /// Keep a replaced file until the new project snapshot is durable, so save failure rolls back I/O.
     fn finish_operation(&self, op: &Operation, result: Result<PathBuf, String>) -> Effects {
@@ -502,7 +563,12 @@ impl Engine {
                 let out_dir = op.project.preset.output.folder.clone().unwrap_or_else(|| op.project.image_dir.join("Output"));
                 media::output_path(&out_dir, op.stt, &row.image_stem(), op.project.preset.output.overwrite)
             } else { op.project.work_dir().join("raw").join(format!("{:03}.mp4", op.stt)) };
-            let backup = temp.with_extension("mp4.backup");
+            // A stable reserved backup protects recovery even after restarting the engine.
+            let backup = final_path.with_extension("mp4.backup");
+            if backup.exists() {
+                let _ = std::fs::remove_file(&temp);
+                return Err(format!("Không ghi đè {}: còn bản sao cần khôi phục {}", final_path.display(), backup.display()));
+            }
             let existing = final_path.exists();
             if existing {
                 if let Err(e) = std::fs::rename(&final_path, &backup) {
@@ -510,10 +576,10 @@ impl Engine {
                     return Err(e.to_string());
                 }
             }
-            if let Err(e) = std::fs::rename(&temp, &final_path) {
-                if existing { let _ = std::fs::rename(&backup, &final_path); }
+            if let Err(e) = self.file_action(FileAction::Publish, &temp, Some(&final_path)) {
+                let rollback = self.rollback_publication(&final_path, existing.then_some(backup.as_path()), false);
                 let _ = std::fs::remove_file(temp);
-                return Err(e.to_string());
+                return Err(match rollback { Ok(()) => e.to_string(), Err(rollback) => format!("{e}. {rollback}") });
             }
             published = Some((final_path.clone(), existing.then_some(backup)));
             Ok(final_path)
@@ -521,17 +587,21 @@ impl Engine {
         let r = st.runner.as_mut().unwrap();
         let fx = if op.postprocess { r.on_postprocess_done(op.stt, result) } else { r.on_raw_ready(op.stt, result) };
         match self.commit_locked(&mut st, before, fx) {
-            Ok(fx) => {
-                st.operations.remove(&op.stt);
-                if let Some((_, Some(backup))) = published { let _ = std::fs::remove_file(backup); }
+            Ok(mut fx) => {
+                if st.operations.get(&op.stt) == Some(&op.id) { st.operations.remove(&op.stt); }
+                if let Some((final_path, Some(backup))) = published {
+                    if let Err(err) = self.file_action(FileAction::RemoveBackup, &backup, None) {
+                        fx.1.push(OwnedEffect::Notify(format!("Đã lưu {}, nhưng không xóa được bản sao {}: {err}. Giữ bản sao để khôi phục; chưa thể ghi đè file này.", final_path.display(), backup.display())));
+                    }
+                }
                 fx
             }
             Err(err) => {
-                if let Some((final_path, backup)) = published {
-                    let _ = std::fs::remove_file(&final_path);
-                    if let Some(backup) = backup { let _ = std::fs::rename(backup, final_path); }
-                }
-                (op.epoch, vec![Effect::Notify(err)])
+                if st.operations.get(&op.stt) == Some(&op.id) { st.operations.remove(&op.stt); }
+                if !op.postprocess { st.runner.as_mut().unwrap().release_import(op.stt); }
+                let rollback = published.map(|(final_path, backup)| self.rollback_publication(&final_path, backup.as_deref(), true));
+                let message = match rollback { Some(Err(rollback)) => format!("{err}. {rollback}"), _ => err };
+                (op.epoch, vec![OwnedEffect::Notify(message)])
             }
         }
     }
