@@ -4,9 +4,17 @@ Ngày 08/10/2026. Người dùng yêu cầu commit và viết kế hoạch để
 
 Đọc `AGENTS.md`, `docs/HANDOFF-CODEX.md`, file này, rồi `docs/superpowers/plans/2026-10-08-claude-code-finish-video-tool.md`. Review toàn nhánh được lưu trong git tại `docs/reviews/2026-10-08-whole-branch-review.md`.
 
-## Cập nhật mới nhất: Tasks 1–2 đã hoàn tất
+## Cập nhật mới nhất: tạm dừng theo yêu cầu người dùng
 
-Task 2 ở `f7690a7`, scoped review **Approved**, không có findings. Sửa import stem có dấu chấm (`A.V1` khớp `a.v1.png`), thêm 9 regression tests cho mapping và runner recovery/reprocess. **79/79 unit**, batch e2e **1/1**, media **2/2** đạt. Full suite vẫn chỉ lỗi mute của Task 4. Xem `docs/reviews/2026-10-08-task-2-verification.md`. **Tiếp tục Task 3**: preset flush/scoping và selected row.
+Task 3 đã commit **WIP `04a1726`**, chưa scoped review, chưa hoàn tất. Người dùng yêu cầu **commit và tạm dừng**; chỉ làm tiếp khi được yêu cầu. Đọc `docs/reviews/2026-10-08-task-3-checkpoint.md` trước khi resume.
+
+Đã có preset flush/queue, scoped preset/row commands, navigation lock và component regressions. UI **25/25**, Rust unit **82/82**, batch e2e **1/1**, media **2/2**, extension **11/11**, build/tsc đạt. Full cargo vẫn lỗi mute Task 4.
+
+**Việc đầu tiên khi resume:** sửa RunTab chặn Tạm dừng khi start_run đang encode. Viết RED test với startRun pending và status.running=true: Pause phải gọi được; navigation chỉ mở lại khi cả start/pause kết thúc, kiểm chứng cả hai thứ tự. Chưa viết test hoặc sửa finding này. Sau đó scoped review Task 3 trước khi đánh dấu hoàn tất. Native smoke dùng fixture/APPDATA riêng; generation **0**, helper/app đã đóng. Chưa build lại installer, không push/merge.
+
+## Tasks 1–2 đã hoàn tất
+
+Task 2 ở `f7690a7`, scoped review **Approved**, không có findings. Sửa import stem có dấu chấm (`A.V1` khớp `a.v1.png`), thêm 9 regression tests cho mapping và runner recovery/reprocess. **79/79 unit**, batch e2e **1/1**, media **2/2** đạt. Full suite vẫn chỉ lỗi mute của Task 4. Xem `docs/reviews/2026-10-08-task-2-verification.md`. Task 3 hiện tạm dừng WIP như cập nhật trên.
 
 Ngày 08/10/2026, người dùng yêu cầu Codex thực hiện Task 1. Code ở `78ed1fe` và bản sửa sau review `d2a708f`. Scoped re-review **Approved**, không còn Critical/Important của Task 1. Rust đã compile; **70/70 unit**, pipeline extension giả + FFmpeg thật **1/1**, media FFmpeg **2/2** đạt. `cargo test` đầy đủ còn đúng regression `review_no_music_honors_original_mute` thất bại (peak 0.1299381), thuộc Task 4 chưa sửa. Không xóa/ignore test đó.
 

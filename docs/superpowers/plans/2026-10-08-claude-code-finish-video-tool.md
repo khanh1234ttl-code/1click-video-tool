@@ -15,6 +15,8 @@
 
 ## Global Constraints
 
+**Tạm dừng theo yêu cầu người dùng:** Task 3 WIP đã commit `04a1726`, chưa review-approved. Đọc `docs/reviews/2026-10-08-task-3-checkpoint.md`; chỉ resume khi người dùng yêu cầu. UI 25/25 và Rust unit 82/82 đạt, nhưng Pause trong pending start chưa có test và đang bị chặn. Checkboxes Task 3 giữ chưa hoàn tất.
+
 - Giữ checkout hiện tại và nhánh feat/video-tool, commit từng task; không push/merge.
 - Test trước code: RED đúng hành vi rồi GREEN. Code đã có không đồng nghĩa đã được kiểm chứng.
 - User-facing text tiếng Việt; không giữ std Mutex qua await.
@@ -95,6 +97,8 @@ cargo test --lib review_exact_filename_beats_ambiguous_stem
 - [x] RED/GREEN đầy đủ và review; commit riêng các sửa runner/import nếu còn thay đổi. Không đổi Submit trước Save chỉ để giữ test cũ.
 
 ### Task 3: Preset flush/scoping và selected row
+
+**Resume đầu tiên:** RED test startRun pending + status.running=true: Pause enabled/gọi pauseRun, navigation lock giữ đến khi cả start/pause settle (cả hai thứ tự). Sửa RunTab busy guard cho Pause độc lập, rồi scoped review toàn Task 3. Chưa bắt đầu fix/test này ở checkpoint `04a1726`.
 
 **Files:** App.svelte, PresetTab.svelte, SourceTab.svelte, lib/api.ts, commands.rs, vite.config.js, tabs/PresetTab.test.ts.
 **Interfaces:** Scoped API `setPreset(preset: Preset, imageDir: string)`; backend kiểm tra image_dir trong cùng engine transaction. App await preset flush trước đổi tab/project; named preset Save flush intended snapshot trước save_preset.

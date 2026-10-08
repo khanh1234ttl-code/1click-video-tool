@@ -6,8 +6,11 @@
 > `superpowers/plans/2026-10-08-claude-code-finish-video-tool.md` next. Historical commit `f23202f`
 > held an unfinished Rust refactor; Task 1 is now complete at `d2a708f` with scoped review
 > approved. Task 2 is complete at `f7690a7`, scoped review approved, 79 unit tests passing.
-> Continue at Task 3; the known Task 4 mute test is
-> still failing. The status
+> The user explicitly requested commit and pause. Task 3 is paused WIP at `04a1726`,
+> not review-approved. Read `reviews/2026-10-08-task-3-checkpoint.md`; when resumed,
+> first fix Pause during pending start_run and test both start/pause settlement orders.
+> UI 25/25, Rust unit 82/82 and build pass; the known Task 4 mute test is still failing.
+> Do not continue until resumed. The status
 > below records the earlier Claude-to-Codex handoff and is historical, not current.
 
 Written 2026-10-08 by Claude Code, which implemented Tasks 1–10 and most of Task 11 and then
