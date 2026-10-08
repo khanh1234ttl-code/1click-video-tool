@@ -69,6 +69,31 @@ pub fn paste_prompts(engine: Eng, start_stt: u32, text: String) -> Result<usize,
 }
 
 #[tauri::command]
+pub fn paste_texts(engine: Eng, start_stt: u32, text: String, image_dir: String) -> Result<usize, String> {
+    let mut n = 0;
+    engine.edit_scoped(Path::new(&image_dir), |p| n = import::paste_texts(&mut p.rows, start_stt, &text))?;
+    Ok(n)
+}
+
+#[tauri::command]
+pub fn apply_text_template(engine: Eng, template: String, stts: Vec<u32>, image_dir: String) -> Result<usize, String> {
+    let mut n = 0;
+    engine.edit_scoped(Path::new(&image_dir), |p| n = import::apply_text_template(&mut p.rows, &template, &stts))?;
+    Ok(n)
+}
+
+#[tauri::command]
+pub fn assign_music_in_order(engine: Eng, stts: Vec<u32>, image_dir: String) -> Result<usize, String> {
+    let tracks = crate::music::list_tracks(engine.project().ok_or("Chưa mở dự án")?.preset.music.folder.as_deref());
+    if tracks.is_empty() {
+        return Err("Chưa có file nhạc trong folder nhạc".into());
+    }
+    let mut res = Ok(0);
+    engine.edit_scoped(Path::new(&image_dir), |p| res = crate::music::assign_in_order(&mut p.rows, &tracks, &stts))?;
+    res
+}
+
+#[tauri::command]
 pub fn import_table(engine: Eng, path: String) -> Result<Vec<String>, String> {
     let recs = import::parse_table(Path::new(&path)).map_err(|e| e.to_string())?;
     let mut unmatched = vec![];

@@ -25,13 +25,33 @@ pub fn rows_from_images(paths: Vec<PathBuf>) -> Vec<Row> {
     paths.into_iter().enumerate().map(|(i, p)| Row::new(i as u32 + 1, p)).collect()
 }
 
-/// One prompt per non-empty line, assigned to rows starting at `start_stt`. Returns rows filled.
-pub fn paste_prompts(rows: &mut [Row], start_stt: u32, text: &str) -> usize {
+fn paste_lines(rows: &mut [Row], start_stt: u32, text: &str, mut set: impl FnMut(&mut Row, &str)) -> usize {
     let lines: Vec<&str> = text.lines().map(str::trim).filter(|l| !l.is_empty()).collect();
     let start = rows.iter().position(|r| r.stt == start_stt).unwrap_or(0);
     let mut n = 0;
     for (row, line) in rows[start..].iter_mut().zip(lines) {
-        row.prompt = line.to_string();
+        set(row, line);
+        n += 1;
+    }
+    n
+}
+
+/// One prompt per non-empty line, assigned to rows starting at `start_stt`. Returns rows filled.
+pub fn paste_prompts(rows: &mut [Row], start_stt: u32, text: &str) -> usize {
+    paste_lines(rows, start_stt, text, |r, l| r.prompt = l.to_string())
+}
+
+/// One on-video text per non-empty line, assigned to rows starting at `start_stt`.
+pub fn paste_texts(rows: &mut [Row], start_stt: u32, text: &str) -> usize {
+    paste_lines(rows, start_stt, text, |r, l| r.text = l.to_string())
+}
+
+/// Sets each selected row's text from `template`: `{stt}` → STT, `{ten}` → image name without
+/// extension. An empty `stts` means every row. Returns rows changed.
+pub fn apply_text_template(rows: &mut [Row], template: &str, stts: &[u32]) -> usize {
+    let mut n = 0;
+    for r in rows.iter_mut().filter(|r| stts.is_empty() || stts.contains(&r.stt)) {
+        r.text = template.replace("{stt}", &r.stt.to_string()).replace("{ten}", &r.image_stem());
         n += 1;
     }
     n
@@ -56,11 +76,18 @@ fn column(headers: &[String], names: &[&str]) -> Option<usize> {
 fn records_from_grid(grid: Vec<Vec<String>>) -> Result<Vec<TableRecord>> {
     let mut it = grid.into_iter();
     let headers = it.next().ok_or_else(|| anyhow!("Bảng trống"))?;
-    let img = column(&headers, &["anh", "ảnh", "image", "file"]).ok_or_else(|| anyhow!("Thiếu cột 'anh' (tên file ảnh)"))?;
+    let img = column(&headers, &["anh", "ảnh", "image", "file"]);
     let prompt = column(&headers, &["prompt"]);
     let text = column(&headers, &["text", "chữ", "chu"]);
     let music = column(&headers, &["nhac", "nhạc", "music"]);
     let cell = |row: &Vec<String>, c: Option<usize>| c.and_then(|i| row.get(i)).map(|s| s.trim().to_string()).filter(|s| !s.is_empty());
+    let Some(img) = img else {
+        // No image column: data row i goes to video i (an empty `image` marks order matching).
+        if prompt.or(text).or(music).is_none() {
+            bail!("Bảng cần ít nhất một cột prompt, text hoặc nhac");
+        }
+        return Ok(it.map(|row| TableRecord { image: String::new(), prompt: cell(&row, prompt), text: cell(&row, text), music: cell(&row, music) }).collect());
+    };
     Ok(it
         .filter_map(|row| {
             let image = cell(&row, Some(img))?;
@@ -93,11 +120,19 @@ pub fn parse_table(path: &Path) -> Result<Vec<TableRecord>> {
     }
 }
 
-/// Fills rows from table records matched by image file name or stem (case-insensitive).
-/// Relative music names are resolved inside `music_dir`. Returns unmatched image names.
+/// Fills rows from table records matched by image file name or stem (case-insensitive), or by
+/// position when the table had no image column. Blank cells leave fields unchanged. Relative
+/// music names are resolved inside `music_dir`. Returns what could not be matched.
 pub fn apply_table(rows: &mut [Row], recs: &[TableRecord], music_dir: Option<&Path>) -> Vec<String> {
     let mut unmatched = Vec::new();
-    for rec in recs {
+    for (i, rec) in recs.iter().enumerate() {
+        if rec.image.is_empty() {
+            match rows.get_mut(i) {
+                Some(row) => fill_row(row, rec, music_dir),
+                None => unmatched.push(format!("dòng {} (không có video thứ {})", i + 2, i + 1)),
+            }
+            continue;
+        }
         let key = rec.image.trim().to_lowercase();
         let exact = rows.iter().position(|r| r.image_name().to_lowercase() == key);
         let matched = exact.or_else(|| {
@@ -109,21 +144,25 @@ pub fn apply_table(rows: &mut [Row], recs: &[TableRecord], music_dir: Option<&Pa
             unmatched.push(rec.image.clone());
             continue;
         };
-        if let Some(p) = &rec.prompt {
-            row.prompt = p.clone();
-        }
-        if let Some(t) = &rec.text {
-            row.text = t.clone();
-        }
-        if let Some(m) = &rec.music {
-            let p = PathBuf::from(m);
-            row.music = Some(match music_dir {
-                Some(d) if p.is_relative() => d.join(p),
-                _ => p,
-            });
-        }
+        fill_row(row, rec, music_dir);
     }
     unmatched
+}
+
+fn fill_row(row: &mut Row, rec: &TableRecord, music_dir: Option<&Path>) {
+    if let Some(p) = &rec.prompt {
+        row.prompt = p.clone();
+    }
+    if let Some(t) = &rec.text {
+        row.text = t.clone();
+    }
+    if let Some(m) = &rec.music {
+        let p = PathBuf::from(m);
+        row.music = Some(match music_dir {
+            Some(d) if p.is_relative() => d.join(p),
+            _ => p,
+        });
+    }
 }
 #[cfg(test)]
 mod tests {
@@ -241,5 +280,47 @@ mod tests {
         assert_eq!(rows[0].prompt, "p1");
         assert_eq!(rows[0].music, Some(PathBuf::from("C:/nhac").join("x.mp3")));
         assert_eq!(rows[1].text, "t2");
+    }
+
+    #[test]
+    fn paste_texts_fills_from_start_row() {
+        let mut rows = rows_from_images(vec!["1.png".into(), "2.png".into(), "3.png".into()]);
+        assert_eq!(paste_texts(&mut rows, 2, "Hai\n\n  Ba  \nBốn"), 2);
+        assert_eq!(rows.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(), ["", "Hai", "Ba"]);
+    }
+
+    #[test]
+    fn text_template_numbers_and_names() {
+        let mut rows = rows_from_images(vec!["D:/a/cảnh 1.png".into(), "D:/a/cảnh 2.png".into()]);
+        assert_eq!(apply_text_template(&mut rows, "Tập {stt} – {ten}", &[]), 2);
+        assert_eq!(rows[1].text, "Tập 2 – cảnh 2");
+        assert_eq!(apply_text_template(&mut rows, "X{stt}", &[1]), 1);
+        assert_eq!((rows[0].text.as_str(), rows[1].text.as_str()), ("X1", "Tập 2 – cảnh 2"));
+    }
+
+    #[test]
+    fn table_without_image_column_matches_by_order() {
+        let grid = vec![
+            vec!["text".to_string(), "nhac".to_string()],
+            vec!["Một".into(), "a.mp3".into()],
+            vec!["".into(), "".into()],
+            vec!["Ba".into(), "".into()],
+            vec!["Thừa".into(), "".into()],
+        ];
+        let recs = records_from_grid(grid).unwrap();
+        let mut rows = rows_from_images(vec!["1.png".into(), "2.png".into(), "3.png".into()]);
+        rows[1].text = "giữ nguyên".into();
+        let unmatched = apply_table(&mut rows, &recs, Some(Path::new("D:/m")));
+        assert_eq!(rows[0].text, "Một");
+        assert_eq!(rows[0].music, Some(PathBuf::from("D:/m").join("a.mp3")));
+        assert_eq!(rows[1].text, "giữ nguyên", "blank cells never erase");
+        assert_eq!(rows[2].text, "Ba");
+        assert_eq!(unmatched, vec!["dòng 5 (không có video thứ 4)".to_string()]);
+    }
+
+    #[test]
+    fn table_needs_a_data_column() {
+        let err = records_from_grid(vec![vec!["ghi chú".to_string()], vec!["x".into()]]).unwrap_err();
+        assert!(err.to_string().contains("ít nhất một cột prompt, text hoặc nhac"), "{err}");
     }
 }

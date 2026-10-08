@@ -48,6 +48,20 @@ pub fn pick_music(assigned: &[Option<PathBuf>], mode: MusicMode, fallback: Music
         })
         .collect()
 }
+/// Writes tracks (natural order, wrapping) into the selected rows' `music`, in STT order.
+/// An empty `stts` means every row.
+pub fn assign_in_order(rows: &mut [crate::model::Row], tracks: &[PathBuf], stts: &[u32]) -> Result<usize, String> {
+    if tracks.is_empty() {
+        return Err("Chưa có file nhạc trong folder nhạc".into());
+    }
+    let mut n = 0;
+    for r in rows.iter_mut().filter(|r| stts.is_empty() || stts.contains(&r.stt)) {
+        r.music = Some(tracks[n % tracks.len()].clone());
+        n += 1;
+    }
+    Ok(n)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -93,5 +107,26 @@ mod tests {
         assert_eq!(pick_music(&vec![None; 2], MusicMode::Random, MusicMode::Random, &[], &mut rng), vec![None, None]);
         assert!(list_tracks(Some(Path::new("Z:/không/tồn/tại"))).is_empty());
         assert!(list_tracks(None).is_empty());
+    }
+
+    #[test]
+    fn assign_in_order_uses_natural_order_and_wraps() {
+        let tmp = tempfile::tempdir().unwrap();
+        for n in ["10.mp3", "2.mp3", "1.mp3"] { std::fs::write(tmp.path().join(n), b"x").unwrap(); }
+        let tracks = list_tracks(Some(tmp.path()));
+        let mut rows = crate::import::rows_from_images((1..=5).map(|i| PathBuf::from(format!("{i}.png"))).collect());
+        assert_eq!(assign_in_order(&mut rows, &tracks, &[]), Ok(5));
+        let names: Vec<_> = rows.iter().map(|r| r.music.as_ref().unwrap().file_name().unwrap().to_string_lossy().into_owned()).collect();
+        assert_eq!(names, ["1.mp3", "2.mp3", "10.mp3", "1.mp3", "2.mp3"]);
+        rows[0].music = None;
+        assert_eq!(assign_in_order(&mut rows, &tracks, &[1, 3]), Ok(2));
+        assert_eq!(rows[2].music.as_ref().unwrap().file_name().unwrap(), "2.mp3", "selection restarts at the first track");
+    }
+
+    #[test]
+    fn assign_in_order_without_tracks_changes_nothing() {
+        let mut rows = crate::import::rows_from_images(vec!["1.png".into()]);
+        assert_eq!(assign_in_order(&mut rows, &[], &[]), Err("Chưa có file nhạc trong folder nhạc".to_string()));
+        assert_eq!(rows[0].music, None);
     }
 }

@@ -133,7 +133,7 @@ Toạ độ kéo thả vẫn lấy từ `getBoundingClientRect()` của canvas, 
 Mọi lệnh hàng loạt đều:
 - ghi `project.json` trong cùng transaction với các sửa đổi khác;
 - phát sự kiện `project`;
-- bị từ chối khi dòng đang gửi, đang render hoặc đang hậu kỳ, giống `update_row` hiện tại.
+- giống `update_row`: không chặn khi dòng đang chạy; thay đổi có hiệu lực ở lần xuất sau.
 
 ## 5. Kiến trúc frontend
 
@@ -173,7 +173,6 @@ Viết test trước cho từng hành vi, thấy RED rồi mới GREEN.
 - `apply_text_template` với `{stt}`/`{ten}` và với `stts`.
 - `assign_music_in_order`: thứ tự tự nhiên, quay vòng, folder trống.
 - `apply_table`: không có cột `anh` thì khớp theo thứ tự; có dòng thừa; thiếu mọi cột dữ liệu.
-- Các lệnh hàng loạt bị từ chối khi dòng đang chạy.
 
 **UI (vitest + happy-dom)**
 - `TextPreview` 9:16: bề ngang khung không vượt `maxH * 9/16`.
