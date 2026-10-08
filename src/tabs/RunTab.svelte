@@ -7,7 +7,11 @@
 
   let { project, status, toast, onBusyChange = () => {} }: { project: Project; status: Status; toast: (t: string) => void; onBusyChange?: (busy: boolean) => void } = $props();
   let picked = $state(new Set<number>());
+  // busy guards Start/Retry/Reprocess; pausing is separate so Pause stays usable while Start
+  // is still encoding images (the engine already reports running then).
   let busy = $state(false);
+  let pausing = $state(false);
+  $effect(() => onBusyChange(busy || pausing));
   const failed = $derived(project.rows.filter((r) => r.status.state === "failed").map((r) => r.stt));
   const doneCount = $derived(project.rows.filter((r) => r.status.state === "done").length);
 
@@ -23,8 +27,12 @@
     if (busy) return;
     const snapshot = structuredClone($state.snapshot(project));
     busy = true;
-    onBusyChange(true);
-    try { await f(snapshot); } catch (e) { toast(String(e)); } finally { busy = false; onBusyChange(false); }
+    try { await f(snapshot); } catch (e) { toast(String(e)); } finally { busy = false; }
+  }
+  async function pauseRun() {
+    if (pausing) return;
+    pausing = true;
+    try { await api.pauseRun(); } catch (e) { toast(String(e)); } finally { pausing = false; }
   }
   const start = () => act(async (snapshot) => {
     await renderOverlays(snapshot, snapshot.rows.filter((r) => r.status.state === "pending").map((r) => r.stt));
@@ -53,7 +61,7 @@
   <span class="grow"></span>
   <span>{doneCount}/{project.rows.length} xong</span>
   <button class="primary" disabled={busy || status.running || !status.connected} onclick={start}>Bắt đầu</button>
-  <button disabled={busy || !status.running} onclick={() => act(api.pauseRun)}>Tạm dừng</button>
+  <button disabled={pausing || !status.running} onclick={pauseRun}>Tạm dừng</button>
   <button disabled={!failed.length || busy} onclick={() => retry(failed)}>Thử lại {failed.length} dòng lỗi</button>
   <button disabled={!picked.size || busy} onclick={() => reprocess([...picked])}>Chỉ hậu kỳ lại ({picked.size})</button>
   <button onclick={() => api.openPath(project.preset.output.folder ?? `${project.imageDir}\\Output`)}>Mở folder Output</button>
