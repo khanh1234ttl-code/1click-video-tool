@@ -4,6 +4,30 @@ Ngày 08/10/2026. Người dùng yêu cầu commit và viết kế hoạch để
 
 Đọc `AGENTS.md`, `docs/HANDOFF-CODEX.md`, file này, rồi `docs/superpowers/plans/2026-10-08-claude-code-finish-video-tool.md`. Review toàn nhánh được lưu trong git tại `docs/reviews/2026-10-08-whole-branch-review.md`.
 
+## Cập nhật 09/10/2026: giao diện 2 bước
+
+Theo yêu cầu người dùng:
+- spec `docs/superpowers/specs/2026-10-09-two-step-ui-design.md`;
+- plan `docs/superpowers/plans/2026-10-09-two-step-ui.md`, làm inline.
+
+Những gì đã làm:
+- **1. Tạo video** chỉ tạo video gốc. Trạng thái mới là `generated` ("Đã tạo"). Có ô tick tự hậu kỳ `gen.autoPostProcess`, mặc định tắt.
+- **2. Hậu kỳ** làm text + nhạc, xem trước trên chính video đã tạo, xuất được nhiều lần.
+- Công cụ hàng loạt: Dán nhiều text, Text theo mẫu `{stt}`/`{ten}`, Gán nhạc lần lượt, Excel không có cột `anh` thì khớp theo thứ tự.
+- Khung 9:16 hiển thị đúng tỉ lệ. Preset và đèn Extension/FFmpeg nằm trên header.
+- Không sửa extension.
+
+Kiểm chứng: xem `docs/reviews/2026-10-09-two-step-ui-check.md`.
+- `cargo test`: unit 103, e2e 3, media 3.
+- `npm test`: 56.
+- `test:ext`: 11.
+- build và tsc đạt.
+
+Bộ cài mới: `src-tauri/target/release/bundle/nsis/1Click Video Tool_0.1.0_x64-setup.exe`,
+**3,132,119 bytes**, SHA256 `8180F5441CCEBFD359A4AF8A9DE9CF00CDB6929A67CBDDD01B57839C809C75CD` (code `1d815c1`).
+
+Review cuối là self-review, không có reviewer độc lập (xem ledger `.superpowers/sdd/2026-10-09-two-step-ui/progress.md`).
+
 ## Trạng thái cuối: kế hoạch Claude Code hoàn tất (Tasks 1–8)
 
 Ngày 08/10/2026, Claude Code đã làm xong Tasks 3–8. Nhánh `feat/video-tool`, chỉ commit cục bộ, không push/merge.

@@ -1224,7 +1224,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, tick, unmount } from "svelte";
 import PostTab from "./PostTab.svelte";
 import { PresetStore } from "../lib/presetStore.svelte";
-import { fixture } from "../lib/presetStore.test";
+import { fixture } from "../lib/testFixtures";
 import type { Project } from "../lib/types";
 
 const boundary = vi.hoisted(() => ({ invoke: vi.fn(), render: vi.fn(async () => null) }));

@@ -13,5 +13,5 @@ made, and environment facts. The plan and spec it points to are authoritative.
 
 The Claude Code continuation plan (`docs/superpowers/plans/2026-10-08-claude-code-finish-video-tool.md`) is
 complete: Tasks 1–8 done, live 3-row run verified (`docs/reviews/2026-10-08-live-run.md`), installer rebuilt.
-Read `docs/HANDOFF-CLAUDE.md` "Trạng thái cuối" for commits, test counts, installer SHA256 and remaining Minor items.
+Then the 2026-10-09 two-step UI update (spec/plan dated 2026-10-09). Read `docs/HANDOFF-CLAUDE.md` "Cập nhật 09/10/2026" and "Trạng thái cuối" for commits, test counts, installer SHA256 and remaining Minor items.
 Branch `feat/video-tool` is local only; pushing or merging needs the user. Do not redo completed tasks.
