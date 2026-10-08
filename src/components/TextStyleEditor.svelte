@@ -43,5 +43,6 @@
 </div>
 
 <style>
-  .grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; }
+  .grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px 12px; }
+  .grid label:has(input[type="checkbox"]) { flex-direction: row; align-items: center; color: var(--text); }
 </style>
