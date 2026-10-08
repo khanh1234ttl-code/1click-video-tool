@@ -3,12 +3,12 @@
 use crate::bridge::{Bridge, BridgeEvent, FromExt, JobItem, JobSettings, ToExt};
 use crate::import::{rows_from_images, scan_files, IMAGE_EXTS};
 use crate::media::{self, MixParams};
-use crate::model::Project;
+use crate::model::{Project, RowStatus};
 use crate::project::{self, AppSettings};
 use crate::runner::{Effect, Runner};
 use futures_util::future::BoxFuture;
 use serde::Serialize;
-use std::collections::VecDeque;
+use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use tokio::sync::{mpsc, Semaphore};
@@ -23,6 +23,54 @@ pub struct Status {
     pub running: bool,
 }
 
+#[cfg(test)]
+mod review_tests {
+    use super::*;
+    use crate::model::RowStatus;
+
+    async fn fixture() -> (tempfile::TempDir, Arc<Engine>, PathBuf) {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("images");
+        std::fs::create_dir_all(&dir).unwrap();
+        image::RgbImage::new(8, 8).save(dir.join("a.png")).unwrap();
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let (bridge, _) = Bridge::start(listener, None).await;
+        let engine = Engine::new(bridge, tmp.path().join("app"), Arc::new(|_| {}));
+        engine.open_project(&dir).unwrap();
+        (tmp, engine, dir)
+    }
+
+    #[tokio::test(flavor = "multi_thread")]
+    async fn review_concurrent_edits_are_durable_and_ordered() {
+        let (_tmp, engine, dir) = fixture().await;
+        let barrier = Arc::new(std::sync::Barrier::new(12));
+        let threads: Vec<_> = (0..12).map(|_| {
+            let e = engine.clone(); let b = barrier.clone();
+            std::thread::spawn(move || { b.wait(); for _ in 0..12 { e.edit(|p| p.common_prompt.push('x')).unwrap(); } })
+        }).collect();
+        for t in threads { t.join().unwrap(); }
+        assert_eq!(project::load(&dir).unwrap().unwrap().common_prompt.len(), 144);
+        assert_eq!(engine.project().unwrap().common_prompt.len(), 144);
+    }
+
+    #[tokio::test]
+    async fn review_queued_postprocess_cannot_mutate_new_project() {
+        let (tmp, engine, _) = fixture().await;
+        engine.edit(|p| { p.rows[0].raw_video = Some("missing.mp4".into()); p.rows[0].status = RowStatus::Downloaded; }).unwrap();
+        let slots = engine.ffmpeg_slots.acquire_many(2).await.unwrap();
+        let e = engine.clone();
+        let task = tokio::spawn(async move { e.post_process(1).await });
+        tokio::task::yield_now().await;
+        let other = tmp.path().join("other");
+        std::fs::create_dir(&other).unwrap();
+        image::RgbImage::new(8, 8).save(other.join("b.png")).unwrap();
+        engine.open_project(&other).unwrap();
+        drop(slots);
+        task.await.unwrap();
+        assert_eq!(engine.project().unwrap().rows[0].status, RowStatus::Pending);
+    }
+}
+
 pub enum EngineEvent {
     Project(Project),
     Status(Status),
@@ -33,6 +81,21 @@ struct State {
     runner: Option<Runner>,
     settings: AppSettings,
     ext_version: Option<String>,
+    epoch: u64,
+    next_operation: u64,
+    operations: BTreeMap<u32, u64>,
+}
+
+type Effects = (u64, Vec<Effect>);
+
+#[derive(Clone)]
+struct Operation {
+    epoch: u64,
+    id: u64,
+    stt: u32,
+    job_id: Option<String>,
+    postprocess: bool,
+    project: Project,
 }
 
 pub struct Engine {
@@ -46,7 +109,7 @@ pub struct Engine {
 impl Engine {
     pub fn new(bridge: Bridge, app_dir: PathBuf, notify: Arc<dyn Fn(EngineEvent) + Send + Sync>) -> Arc<Engine> {
         let settings = project::load_settings(&app_dir);
-        Arc::new(Engine { state: Mutex::new(State { runner: None, settings, ext_version: None }), bridge, app_dir, notify, ffmpeg_slots: Semaphore::new(2) })
+        Arc::new(Engine { state: Mutex::new(State { runner: None, settings, ext_version: None, epoch: 0, next_operation: 0, operations: BTreeMap::new() }), bridge, app_dir, notify, ffmpeg_slots: Semaphore::new(2) })
     }
 
     pub fn app_dir(&self) -> PathBuf {
@@ -88,9 +151,9 @@ impl Engine {
     }
 
     /// Sync on purpose: the std Mutex guard must never live across an `.await`.
-    fn effects_for(&self, ev: BridgeEvent) -> Vec<Effect> {
+    fn effects_for(&self, ev: BridgeEvent) -> Effects {
         let mut st = self.state.lock().unwrap();
-        match ev {
+        let fx = match ev {
             BridgeEvent::Connected { ext_id } => {
                 if st.settings.allowed_extension_id.as_deref() != Some(&ext_id) {
                     st.settings.allowed_extension_id = Some(ext_id);
@@ -108,7 +171,8 @@ impl Engine {
                 }
                 st.runner.as_mut().map(|r| r.on_message(m)).unwrap_or_default()
             }
-        }
+        };
+        self.commit_locked(&mut st, fx)
     }
 
     async fn on_bridge_event(self: Arc<Self>, ev: BridgeEvent) {
@@ -119,6 +183,7 @@ impl Engine {
 
     /// Opens `<image_dir>/_1click/project.json`, or creates a project from the images.
     pub fn open_project(self: &Arc<Self>, image_dir: &Path) -> Result<Project, String> {
+        let mut st = self.state.lock().unwrap();
         let project = match project::load(image_dir).map_err(|e| e.to_string())? {
             Some(p) => p,
             None => {
@@ -137,7 +202,12 @@ impl Engine {
             fx.extend(runner.on_connected());
         }
         let p = runner.project.clone();
-        self.state.lock().unwrap().runner = Some(runner);
+        st.epoch += 1;
+        st.operations.clear();
+        st.runner = Some(runner);
+        let fx = self.commit_locked(&mut st, fx);
+        drop(st);
+        self.emit_status();
         let me = self.clone();
         tokio::spawn(async move { me.apply(fx).await });
         Ok(p)
@@ -145,14 +215,15 @@ impl Engine {
 
     /// Applies a user edit to the open project, saves it and notifies the UI.
     pub fn edit(&self, f: impl FnOnce(&mut Project)) -> Result<(), String> {
-        let p = {
-            let mut st = self.state.lock().unwrap();
-            let r = st.runner.as_mut().ok_or("Chưa mở dự án")?;
-            f(&mut r.project);
-            r.project.clone()
-        };
-        project::save(&p).map_err(|e| e.to_string())?;
-        (self.notify)(EngineEvent::Project(p));
+        let mut st = self.state.lock().unwrap();
+        let r = st.runner.as_mut().ok_or("Chưa mở dự án")?;
+        let before = r.project.clone();
+        f(&mut r.project);
+        if let Err(e) = project::save(&r.project) {
+            r.project = before;
+            return Err(e.to_string());
+        }
+        (self.notify)(EngineEvent::Project(r.project.clone()));
         Ok(())
     }
 
@@ -164,25 +235,53 @@ impl Engine {
             return Err("Không tìm thấy FFmpeg. Chọn thư mục FFmpeg trong tab Chạy.".into());
         }
         let fx = self.start_effects()?;
+        self.emit_status();
         self.apply(fx).await;
         self.emit_status();
         Ok(())
     }
 
     /// Sync helper so neither the Mutex guard nor ThreadRng is held across an `.await`.
-    fn start_effects(&self) -> Result<Vec<Effect>, String> {
+    fn start_effects(&self) -> Result<Effects, String> {
         let mut st = self.state.lock().unwrap();
         let r = st.runner.as_mut().ok_or("Chưa mở dự án")?;
         let tracks = crate::music::list_tracks(r.project.preset.music.folder.as_deref());
-        r.start(&tracks, &mut rand::thread_rng())
+        let before = r.project.clone();
+        let fx = r.start(&tracks, &mut rand::thread_rng())?;
+        if let Err(e) = project::save(&r.project) {
+            r.project = before;
+            r.running = r.project.rows.iter().any(|row| row.status.is_active() || matches!(row.status, RowStatus::Downloaded | RowStatus::PostProcessing));
+            return Err(e.to_string());
+        }
+        Ok(self.commit_locked(&mut st, fx))
     }
 
-    fn with_runner(&self, f: impl FnOnce(&mut Runner) -> Vec<Effect>) -> Vec<Effect> {
-        self.state.lock().unwrap().runner.as_mut().map(f).unwrap_or_default()
+    /// Mutation, snapshot and durable write are one synchronous transaction. No guard crosses await.
+    fn commit_locked(&self, st: &mut State, fx: Vec<Effect>) -> Effects {
+        if !fx.is_empty() {
+            if let Some(r) = st.runner.as_ref() {
+                if let Err(err) = project::save(&r.project) {
+                    return (st.epoch, vec![Effect::Notify(format!("Không lưu được dự án: {err}"))]);
+                }
+                (self.notify)(EngineEvent::Project(r.project.clone()));
+            }
+        }
+        (st.epoch, fx.into_iter().filter(|f| !matches!(f, Effect::Save | Effect::Changed)).collect())
+    }
+
+    fn with_runner(&self, f: impl FnOnce(&mut Runner) -> Vec<Effect>) -> Effects {
+        let mut st = self.state.lock().unwrap();
+        let fx = st.runner.as_mut().map(f).unwrap_or_default();
+        self.commit_locked(&mut st, fx)
     }
 
     pub async fn pause(self: &Arc<Self>) {
-        let fx = self.with_runner(|r| r.pause());
+        let fx = {
+            let mut st = self.state.lock().unwrap();
+            st.operations.clear();
+            let fx = st.runner.as_mut().map(|r| r.pause()).unwrap_or_default();
+            self.commit_locked(&mut st, fx)
+        };
         self.apply(fx).await;
         self.emit_status();
     }

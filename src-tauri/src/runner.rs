@@ -27,11 +27,12 @@ pub struct Runner {
     pub running: bool,
     failure_streak: u32,
     job_counter: u64,
+    importing: BTreeSet<u32>,
 }
 
 impl Runner {
     pub fn new(project: Project) -> Self {
-        Self { project, running: false, failure_streak: 0, job_counter: 0 }
+        Self { project, running: false, failure_streak: 0, job_counter: 0, importing: BTreeSet::new() }
     }
 
     fn new_job_id(&mut self) -> String {
@@ -48,13 +49,12 @@ impl Runner {
         for r in self.project.rows.iter_mut().filter(|r| r.status.is_active() && job_id.map_or(true, |j| r.job_id.as_deref() == Some(j))) {
             r.status = RowStatus::Pending;
             r.job_id = None;
+            self.importing.remove(&r.stt);
         }
     }
 
     fn refresh_running(&mut self) {
-        if !self.project.rows.iter().any(|r| r.status.is_active()) {
-            self.running = false;
-        }
+        self.running = self.project.rows.iter().any(|r| r.status.is_active() || matches!(r.status, RowStatus::Downloaded | RowStatus::PostProcessing));
     }
 
     pub fn start(&mut self, tracks: &[PathBuf], rng: &mut impl Rng) -> Result<Vec<Effect>, String> {
@@ -80,13 +80,14 @@ impl Runner {
         }
         self.running = true;
         self.failure_streak = 0;
-        Ok(vec![Effect::Submit { job_id, stts }, Effect::Save, Effect::Changed])
+        Ok(vec![Effect::Save, Effect::Changed, Effect::Submit { job_id, stts }])
     }
 
     /// The engine could not deliver the job (extension disconnected).
     pub fn revert_submit(&mut self, job_id: &str, reason: &str) -> Vec<Effect> {
+        if !self.project.rows.iter().any(|r| r.job_id.as_deref() == Some(job_id) && r.status.is_active()) { return vec![]; }
         self.reset_active(Some(job_id));
-        self.running = false;
+        self.refresh_running();
         vec![Effect::Notify(reason.to_string()), Effect::Save, Effect::Changed]
     }
 
@@ -108,11 +109,7 @@ impl Runner {
 
     pub fn on_message(&mut self, msg: FromExt) -> Vec<Effect> {
         match msg {
-            FromExt::JobRejected { job_id, error } => {
-                self.reset_active(Some(&job_id));
-                self.running = false;
-                vec![Effect::Notify(error), Effect::Save, Effect::Changed]
-            }
+            FromExt::JobRejected { job_id, error } => self.revert_submit(&job_id, &error),
             FromExt::ItemProgress { job_id, index, percent } => match self.active_row(&job_id, index) {
                 Some(r) => {
                     r.status = RowStatus::Rendering { percent: percent.min(100) };
@@ -120,9 +117,10 @@ impl Runner {
                 }
                 None => vec![],
             },
-            FromExt::ItemDownloaded { job_id, index, file_path } => match self.active_row(&job_id, index) {
-                Some(_) => vec![Effect::ImportRaw { stt: index, from: file_path.into() }],
-                None => vec![],
+            FromExt::ItemDownloaded { job_id, index, file_path } => {
+                if self.active_row(&job_id, index).is_some() && self.importing.insert(index) {
+                    vec![Effect::ImportRaw { stt: index, from: file_path.into() }]
+                } else { vec![] }
             },
             FromExt::ItemFailed { job_id, index, error } => self.fail_generate(&job_id, index, error),
             FromExt::JobStatus { job_id, known, done, failed, .. } => {
@@ -133,7 +131,7 @@ impl Runner {
                 }
                 let mut fx = vec![];
                 for d in done {
-                    if self.active_row(&job_id, d.index).is_some() {
+                    if self.active_row(&job_id, d.index).is_some() && self.importing.insert(d.index) {
                         fx.push(Effect::ImportRaw { stt: d.index, from: d.file_path.into() });
                     }
                 }
@@ -147,6 +145,7 @@ impl Runner {
     }
 
     pub fn on_raw_ready(&mut self, stt: u32, result: Result<PathBuf, String>) -> Vec<Effect> {
+        self.importing.remove(&stt);
         let Some(r) = self.project.row_mut(stt) else { return vec![] };
         let fx = match result {
             Ok(p) => {
@@ -168,7 +167,8 @@ impl Runner {
         match self.project.row_mut(stt) {
             Some(r) => {
                 r.status = RowStatus::PostProcessing;
-                vec![Effect::Changed]
+                self.refresh_running();
+                vec![Effect::Save, Effect::Changed]
             }
             None => vec![],
         }
@@ -183,12 +183,19 @@ impl Runner {
             }
             Err(e) => r.status = RowStatus::Failed { stage: Stage::PostProcess, message: e },
         }
+        self.refresh_running();
         vec![Effect::Save, Effect::Changed]
     }
 
     pub fn pause(&mut self) -> Vec<Effect> {
         let jobs: BTreeSet<String> = self.project.rows.iter().filter(|r| r.status.is_active()).filter_map(|r| r.job_id.clone()).collect();
         self.reset_active(None);
+        self.importing.clear();
+        for r in &mut self.project.rows {
+            if matches!(r.status, RowStatus::Downloaded | RowStatus::PostProcessing) {
+                r.status = RowStatus::Failed { stage: Stage::PostProcess, message: "Đã tạm dừng hậu kỳ".into() };
+            }
+        }
         self.running = false;
         let mut fx: Vec<Effect> = jobs.into_iter().map(|job_id| Effect::Send(ToExt::JobCancel { job_id })).collect();
         fx.extend([Effect::Save, Effect::Changed]);
@@ -217,12 +224,17 @@ impl Runner {
     }
 
     pub fn reprocess(&mut self, stts: &[u32]) -> Vec<Effect> {
-        self.project
-            .rows
-            .iter()
-            .filter(|r| stts.contains(&r.stt) && r.raw_video.is_some() && matches!(r.status, RowStatus::Done | RowStatus::Downloaded | RowStatus::Failed { stage: Stage::PostProcess, .. }))
-            .map(|r| Effect::PostProcess(r.stt))
-            .collect()
+        let selected: Vec<_> = self.project.rows.iter().filter(|r| stts.contains(&r.stt) && r.raw_video.is_some() && matches!(r.status, RowStatus::Done | RowStatus::Downloaded | RowStatus::Failed { stage: Stage::PostProcess, .. })).map(|r| r.stt).collect();
+        let assigned: Vec<_> = selected.iter().map(|s| self.project.row(*s).unwrap().music.clone()).collect();
+        let m = &self.project.preset.music;
+        let tracks = crate::music::list_tracks(m.folder.as_deref());
+        let picks = pick_music(&assigned, m.mode, m.fallback, &tracks, &mut rand::thread_rng());
+        let mut fx = vec![Effect::Save, Effect::Changed];
+        for (stt, pick) in selected.into_iter().zip(picks) {
+            self.project.row_mut(stt).unwrap().resolved_music = pick;
+            fx.push(Effect::PostProcess(stt));
+        }
+        fx
     }
 
     pub fn on_connected(&self) -> Vec<Effect> {
@@ -245,7 +257,8 @@ impl Runner {
                 }
             }
         }
-        fx.push(Effect::Changed);
+        self.refresh_running();
+        fx.extend([Effect::Save, Effect::Changed]);
         fx
     }
 }
@@ -267,13 +280,67 @@ mod tests {
     fn started(n: u32) -> (Runner, String) {
         let mut r = runner(n);
         let fx = r.start(&[], &mut StdRng::seed_from_u64(1)).unwrap();
-        let Effect::Submit { job_id, stts } = &fx[0] else { panic!("{fx:?}") };
+        let Effect::Submit { job_id, stts } = fx.iter().find(|f| matches!(f, Effect::Submit { .. })).unwrap() else { panic!("{fx:?}") };
         assert_eq!(stts, &(1..=n).collect::<Vec<_>>());
         (r, job_id.clone())
     }
 
     fn status(r: &Runner, stt: u32) -> RowStatus {
         r.project.row(stt).unwrap().status.clone()
+    }
+
+    #[test]
+    fn review_stale_rejections_do_not_stop_new_job() {
+        let (mut r, old) = started(1);
+        r.pause();
+        r.start(&[], &mut StdRng::seed_from_u64(1)).unwrap();
+        assert!(r.on_message(FromExt::JobRejected { job_id: old.clone(), error: "late".into() }).is_empty());
+        assert!(r.revert_submit(&old, "late encode").is_empty());
+        assert!(r.running);
+    }
+
+    #[test]
+    fn review_duplicate_downloads_are_claimed_once() {
+        let (mut r, job) = started(1);
+        let msg = || FromExt::ItemDownloaded { job_id: job.clone(), index: 1, file_path: "raw".into() };
+        assert!(!r.on_message(msg()).is_empty());
+        assert!(r.on_message(msg()).is_empty());
+        assert!(r.on_message(FromExt::JobStatus { job_id: job, known: true, done: vec![crate::bridge::DoneItem { index: 1, file_path: "raw".into() }], failed: vec![], pending: vec![] }).is_empty());
+    }
+
+    #[test]
+    fn review_recovery_restores_running_and_failure_guard() {
+        let (r, job) = started(4);
+        let mut r = Runner::new(r.project);
+        r.recover_after_load();
+        assert!(r.running);
+        for i in 1..=2 { r.on_message(FromExt::ItemFailed { job_id: job.clone(), index: i, error: "x".into() }); }
+        assert!(r.on_message(FromExt::ItemFailed { job_id: job.clone(), index: 3, error: "x".into() }).contains(&Effect::Send(ToExt::JobCancel { job_id: job })));
+    }
+
+    #[test]
+    fn review_start_persists_before_submit() {
+        let fx = runner(1).start(&[], &mut StdRng::seed_from_u64(1)).unwrap();
+        let save = fx.iter().position(|f| *f == Effect::Save).unwrap();
+        let submit = fx.iter().position(|f| matches!(f, Effect::Submit { .. })).unwrap();
+        assert!(save < submit);
+    }
+
+    #[test]
+    fn review_reprocess_resolves_current_music() {
+        let tmp = tempfile::tempdir().unwrap();
+        let a = tmp.path().join("a.mp3"); let b = tmp.path().join("b.mp3");
+        std::fs::write(&a, b"a").unwrap(); std::fs::write(&b, b"b").unwrap();
+        let mut r = runner(1);
+        r.project.preset.music.mode = crate::model::MusicMode::Assigned;
+        r.project.rows[0].status = RowStatus::Done;
+        r.project.rows[0].raw_video = Some("raw".into());
+        r.project.rows[0].resolved_music = Some(a);
+        r.project.rows[0].music = Some(b.clone());
+        let fx = r.reprocess(&[1]);
+        assert_eq!(r.project.rows[0].resolved_music, Some(b));
+        assert!(fx.contains(&Effect::PostProcess(1)));
+        assert!(!fx.iter().any(|f| matches!(f, Effect::Submit { .. })));
     }
 
     #[test]

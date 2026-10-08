@@ -99,8 +99,14 @@ pub fn apply_table(rows: &mut [Row], recs: &[TableRecord], music_dir: Option<&Pa
     let mut unmatched = Vec::new();
     for rec in recs {
         let key = rec.image.trim().to_lowercase();
-        let key_stem = Path::new(&key).file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default();
-        let Some(row) = rows.iter_mut().find(|r| r.image_name().to_lowercase() == key || r.image_stem().to_lowercase() == key || r.image_stem().to_lowercase() == key_stem) else {
+        let exact = rows.iter().position(|r| r.image_name().to_lowercase() == key);
+        let matched = exact.or_else(|| {
+            if Path::new(&key).extension().is_some() { return None; }
+            let mut matches = rows.iter().enumerate().filter(|(_, r)| r.image_stem().to_lowercase() == key);
+            let first = matches.next()?.0;
+            matches.next().is_none().then_some(first)
+        });
+        let Some(row) = matched.map(|i| &mut rows[i]) else {
             unmatched.push(rec.image.clone());
             continue;
         };
@@ -127,6 +133,18 @@ mod tests {
 
     fn touch(dir: &Path, name: &str) {
         fs::write(dir.join(name), b"x").unwrap();
+    }
+
+    #[test]
+    fn review_exact_filename_beats_ambiguous_stem() {
+        let mut rows = rows_from_images(vec!["a.jpg".into(), "a.png".into()]);
+        let records = vec![TableRecord { image: "a.png".into(), prompt: Some("PNG".into()), ..Default::default() }];
+        assert!(apply_table(&mut rows, &records, None).is_empty());
+        assert_eq!(rows[0].prompt, "");
+        assert_eq!(rows[1].prompt, "PNG");
+        let records = vec![TableRecord { image: "a".into(), prompt: Some("ambiguous".into()), ..Default::default() }];
+        assert_eq!(apply_table(&mut rows, &records, None), vec!["a"]);
+        assert_eq!(rows[1].prompt, "PNG");
     }
 
     #[test]

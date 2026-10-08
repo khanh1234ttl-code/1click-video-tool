@@ -7,6 +7,33 @@ use std::time::Duration;
 use tokio_tungstenite::tungstenite::{client::IntoClientRequest, Message};
 
 #[tokio::test(flavor = "multi_thread")]
+async fn review_no_music_honors_original_mute() {
+    let ffmpeg = media::find_tool("ffmpeg", None).expect("ffmpeg required");
+    let tmp = tempfile::tempdir().unwrap();
+    image::RgbImage::new(16, 16).save(tmp.path().join("a.png")).unwrap();
+    let raw = tmp.path().join("tone.mp4");
+    media::run_tool(&ffmpeg, &["-y", "-v", "error", "-f", "lavfi", "-i", "color=size=64x64:duration=1", "-f", "lavfi", "-i", "sine=duration=1", "-shortest", "-c:v", "libx264", "-c:a", "aac", raw.to_str().unwrap()].map(String::from)).unwrap();
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let (bridge, _) = Bridge::start(listener, None).await;
+    let engine = Engine::new(bridge, tmp.path().join("app"), Arc::new(|_| {}));
+    engine.open_project(tmp.path()).unwrap();
+    engine.edit(|p| { p.rows[0].status = RowStatus::Done; p.rows[0].raw_video = Some(raw); p.preset.music.original_volume = 0.0; }).unwrap();
+    engine.reprocess(&[1]).await;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    let out = loop {
+        let p = engine.project().unwrap();
+        if let Some(out) = p.rows[0].output.clone() { break out; }
+        assert!(tokio::time::Instant::now() < deadline, "{:?}", p.rows[0]);
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    };
+    let pcm = tmp.path().join("samples.f32");
+    media::run_tool(&ffmpeg, &["-y", "-v", "error", "-i", out.to_str().unwrap(), "-vn", "-f", "f32le", pcm.to_str().unwrap()].map(String::from)).unwrap();
+    let bytes = std::fs::read(pcm).unwrap();
+    let peak = bytes.chunks_exact(4).map(|s| f32::from_le_bytes(s.try_into().unwrap()).abs()).fold(0.0, f32::max);
+    assert!(peak < 0.00001, "muted audio peak was {peak}");
+}
+
+#[tokio::test(flavor = "multi_thread")]
 async fn batch_runs_end_to_end() {
     let Some(ffmpeg) = media::find_tool("ffmpeg", None) else { eprintln!("ffmpeg missing, skip"); return };
     let tmp = tempfile::tempdir().unwrap();
