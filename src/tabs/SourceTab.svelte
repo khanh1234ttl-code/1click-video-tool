@@ -39,6 +39,15 @@
       toast(unmatched.length ? `Không khớp ảnh: ${unmatched.join(", ")}` : "Đã nhập bảng");
     } catch (e) { toast(String(e)); }
   }
+  /** "Dán nhiều prompt" fills from the selected row (spec 4.1); the start row stays editable. */
+  function select(row: Row) {
+    selected = row;
+    pasteFrom = row.stt;
+  }
+  function togglePaste() {
+    showPaste = !showPaste;
+    if (showPaste) pasteFrom = selected?.stt ?? 1;
+  }
   async function paste() {
     const n = await api.pastePrompts(pasteFrom, pasteText);
     toast(`Đã điền ${n} prompt`);
@@ -50,7 +59,7 @@
 <div class="bar">
   <button class="primary" onclick={pickFolder} disabled={opening}>Chọn folder ảnh</button>
   <button onclick={importTable} disabled={!project}>Nhập CSV/Excel</button>
-  <button onclick={() => (showPaste = !showPaste)} disabled={!project}>Dán nhiều prompt</button>
+  <button onclick={togglePaste} disabled={!project}>Dán nhiều prompt</button>
   <input class="grow" placeholder="Prompt chung cho các dòng chưa có prompt riêng" bind:value={common} onchange={() => api.setCommonPrompt(common)} disabled={!project} />
 </div>
 {#if showPaste}
@@ -68,7 +77,7 @@
       <thead><tr><th>STT</th><th>Ảnh</th><th>Tên file</th><th>Prompt</th><th>Text</th><th>Nhạc</th><th>Trạng thái</th></tr></thead>
       <tbody>
         {#each project.rows as row (row.stt)}
-          <tr class:sel={selected?.stt === row.stt} onclick={() => (selected = row)}>
+          <tr class:sel={selected?.stt === row.stt} onclick={() => select(row)}>
             <td>{row.stt}</td>
             <td><img src={convertFileSrc(row.imagePath)} alt="" loading="lazy" /></td>
             <td>{row.imagePath.split(/[\\/]/).pop()}</td>
