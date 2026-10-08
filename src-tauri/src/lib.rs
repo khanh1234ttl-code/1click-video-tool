@@ -1,4 +1,5 @@
 pub mod model;
+pub mod music;
 pub mod import;
 pub mod project;
 
