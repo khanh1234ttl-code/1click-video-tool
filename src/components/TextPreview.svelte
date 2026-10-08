@@ -53,7 +53,8 @@
 
 <style>
   /* --max-w keeps a tall frame within maxHeight; set inline, applied here (min() inline is not portable). */
-  .frame { width: min(100%, var(--max-w)); position: relative; margin: 0 auto; background: #222 center/cover no-repeat; border-radius: 8px; overflow: hidden; }
+  /* flex-shrink: 0 — inside a scrolling flex column the frame must keep its aspect-ratio height. */
+  .frame { width: min(100%, var(--max-w)); flex-shrink: 0; position: relative; margin: 0 auto; background: #222 center/cover no-repeat; border-radius: 8px; overflow: hidden; }
   video, canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   video { object-fit: cover; }
   canvas { cursor: move; }

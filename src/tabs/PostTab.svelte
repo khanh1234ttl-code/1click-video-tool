@@ -1,9 +1,10 @@
 <script lang="ts">
+  import { onDestroy, untrack } from "svelte";
   import { api } from "../lib/api";
   import { renderOverlays } from "../lib/exportOverlays";
   import type { PresetStore } from "../lib/presetStore.svelte";
   import { resolutionFor } from "../lib/textLayout";
-  import type { Project, TextStyle } from "../lib/types";
+  import type { Project, Row, TextStyle } from "../lib/types";
   import MusicSettings from "../components/MusicSettings.svelte";
   import OutputSettings from "../components/OutputSettings.svelte";
   import PostList from "../components/PostList.svelte";
@@ -20,37 +21,46 @@
   const ready = $derived(project.rows.filter((r) => r.rawVideo).map((r) => r.stt));
   const pickedReady = $derived(ready.filter((s) => picked.has(s)));
 
-  // Per-row style: edited locally, saved shortly after each change; export waits for the save.
+  // Per-row style: edited locally (form or preview drag), saved shortly after each change;
+  // export waits for the save.
   let own = $state(false);
   let rowStyle: TextStyle = $state(structuredClone($state.snapshot(store.preset.text)));
   let shownRow = 0;
+  let savedOverride = "";
   $effect(() => {
     const r = row;
     if (!r || r.stt === shownRow) return;
     shownRow = r.stt;
     own = r.textOverride !== null;
     rowStyle = structuredClone(r.textOverride ?? $state.snapshot(store.preset.text)) as TextStyle;
+    savedOverride = own ? JSON.stringify(rowStyle) : "null";
+  });
+  // One watcher for every way the override changes: the checkbox, the form, or the preview.
+  $effect(() => {
+    const json = own ? JSON.stringify($state.snapshot(rowStyle)) : "null";
+    if (json === savedOverride) return;
+    savedOverride = json;
+    scheduleOverride(untrack(() => row));
   });
   let pendingOverride: Promise<void> = Promise.resolve();
   let overrideTimer: ReturnType<typeof setTimeout> | undefined;
-  function saveOverride() {
-    const r = row;
+  let overrideWork: (() => void) | undefined;
+  function scheduleOverride(r: Row | undefined) {
     if (!r) return;
     const override = own ? ($state.snapshot(rowStyle) as TextStyle) : null;
     clearTimeout(overrideTimer);
-    overrideTimer = setTimeout(() => {
+    overrideWork = () => {
+      overrideWork = undefined;
       pendingOverride = api.updateRow({ stt: r.stt, prompt: r.prompt, text: r.text, music: r.music, textOverride: override }, project.imageDir).catch((e) => toast(String(e)));
-    }, 300);
+    };
+    overrideTimer = setTimeout(() => overrideWork?.(), 300);
   }
   async function flushOverride() {
-    if (overrideTimer) { clearTimeout(overrideTimer); overrideTimer = undefined; saveOverrideNow(); }
+    clearTimeout(overrideTimer);
+    overrideWork?.();
     await pendingOverride;
   }
-  function saveOverrideNow() {
-    const r = row;
-    if (!r) return;
-    pendingOverride = api.updateRow({ stt: r.stt, prompt: r.prompt, text: r.text, music: r.music, textOverride: own ? ($state.snapshot(rowStyle) as TextStyle) : null }, project.imageDir).catch((e) => toast(String(e)));
-  }
+  onDestroy(() => { clearTimeout(overrideTimer); overrideWork?.(); });
 
   async function exportRows(stts: number[]) {
     if (busy) return;
@@ -80,12 +90,12 @@
       {:else}
         <TextPreview bind:style={store.preset.text} text={row.text || "Chữ mẫu trên video"} w={res.w} h={res.h} imagePath={row.imagePath} videoPath={row.rawVideo} maxHeight="42vh" />
       {/if}
-      <label class="check"><input type="checkbox" bind:checked={own} onchange={saveOverride} /> Kiểu/vị trí chữ riêng cho video {row.stt}</label>
+      <label class="check"><input type="checkbox" bind:checked={own} /> Kiểu/vị trí chữ riêng cho video {row.stt}</label>
     {/if}
     <div class="sections">
       <details open>
         <summary>Kiểu chữ {own ? `(riêng video ${selected})` : "(chung)"}</summary>
-        {#if own}<div oninput={saveOverride} onchange={saveOverride} role="presentation"><TextStyleEditor bind:style={rowStyle} /></div>
+        {#if own}<TextStyleEditor bind:style={rowStyle} />
         {:else}<TextStyleEditor bind:style={store.preset.text} />{/if}
       </details>
       <details><summary>Nhạc nền</summary><MusicSettings bind:music={store.preset.music} /></details>

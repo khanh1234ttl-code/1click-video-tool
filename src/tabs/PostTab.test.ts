@@ -87,3 +87,17 @@ describe("PostTab batch tools", () => {
     expect(call("update_row")).toEqual({ edit: expect.objectContaining({ stt: 1, text: "Tập 1" }), imageDir: "A" });
   });
 });
+
+describe("PostTab per-row style", () => {
+  it("saves a per-row position set on the preview, not only edits in the style form", async () => {
+    vi.useFakeTimers();
+    try {
+      const own = [...target.querySelectorAll<HTMLInputElement>("input[type=checkbox]")].find((i) => i.parentElement?.textContent?.includes("riêng cho video"))!;
+      own.click(); flushSync(); await vi.advanceTimersByTimeAsync(400); await settle();
+      boundary.invoke.mockClear();
+      target.querySelectorAll<HTMLButtonElement>(".snaps button")[0].click(); flushSync();
+      await vi.advanceTimersByTimeAsync(400); await settle();
+      expect(call("update_row")).toEqual({ edit: expect.objectContaining({ stt: 1, textOverride: expect.objectContaining({ x: 0.15, y: 0.15 }) }), imageDir: "A" });
+    } finally { vi.useRealTimers(); }
+  });
+});
