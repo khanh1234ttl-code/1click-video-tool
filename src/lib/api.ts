@@ -1,0 +1,31 @@
+import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+import type { FontInfo, Preset, Project, Status, TextStyle } from "./types";
+
+export const api = {
+  openProject: (dir: string) => invoke<Project>("open_project", { dir }),
+  getProject: () => invoke<Project | null>("get_project"),
+  updateRow: (edit: { stt: number; prompt: string; text: string; music: string | null; textOverride: TextStyle | null }) => invoke<void>("update_row", { edit }),
+  setCommonPrompt: (text: string) => invoke<void>("set_common_prompt", { text }),
+  pastePrompts: (startStt: number, text: string) => invoke<number>("paste_prompts", { startStt, text }),
+  importTable: (path: string) => invoke<string[]>("import_table", { path }),
+  setPreset: (preset: Preset) => invoke<void>("set_preset", { preset }),
+  listPresets: () => invoke<string[]>("list_presets"),
+  savePreset: (name: string) => invoke<void>("save_preset", { name }),
+  loadPreset: (name: string) => invoke<Preset>("load_preset", { name }),
+  saveOverlays: (items: { stt: number; pngBase64: string | null }[]) => invoke<void>("save_overlays", { items }),
+  startRun: () => invoke<void>("start_run"),
+  pauseRun: () => invoke<void>("pause_run"),
+  retryRows: (stts: number[]) => invoke<void>("retry_rows", { stts }),
+  reprocessRows: (stts: number[]) => invoke<void>("reprocess_rows", { stts }),
+  getStatus: () => invoke<Status>("get_status"),
+  setFfmpegDir: (dir: string) => invoke<void>("set_ffmpeg_dir", { dir }),
+  resetExtension: () => invoke<void>("reset_extension"),
+  listFonts: () => invoke<FontInfo[]>("list_fonts"),
+  readFileBase64: (path: string) => invoke<string>("read_file_base64", { path }),
+  listMusic: () => invoke<string[]>("list_music"),
+  openPath: (path: string) => invoke<void>("open_path", { path }),
+  onProject: (f: (p: Project) => void) => listen<Project>("project", (e) => f(e.payload)),
+  onStatus: (f: (s: Status) => void) => listen<Status>("status", (e) => f(e.payload)),
+  onToast: (f: (t: string) => void) => listen<string>("toast", (e) => f(e.payload)),
+};
