@@ -7,7 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "test": "vitest run",
-    "test:ext": "node --test ext-tests/",
+    "test:ext": "node --test ext-tests/*.test.mjs",
     "tauri": "tauri"
   },
   "dependencies": {
