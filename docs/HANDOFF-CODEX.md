@@ -5,7 +5,8 @@
 > a plan for Claude Code. Read `HANDOFF-CLAUDE.md` and
 > `superpowers/plans/2026-10-08-claude-code-finish-video-tool.md` next. Historical commit `f23202f`
 > held an unfinished Rust refactor; Task 1 is now complete at `d2a708f` with scoped review
-> approved and 70 Rust unit tests passing. Continue at Task 2; the known Task 4 mute test is
+> approved. Task 2 is complete at `f7690a7`, scoped review approved, 79 unit tests passing.
+> Continue at Task 3; the known Task 4 mute test is
 > still failing. The status
 > below records the earlier Claude-to-Codex handoff and is historical, not current.
 

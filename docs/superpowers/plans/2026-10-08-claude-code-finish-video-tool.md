@@ -11,6 +11,8 @@
 
 **Tiến độ mới nhất:** Task 1 đã hoàn tất ở `d2a708f`, scoped re-review Approved. Rust compile và 70 unit tests đạt; e2e batch và 2 media tests đạt. Full suite còn regression âm gốc của Task 4. Xem `docs/reviews/2026-10-08-task-1-verification.md`; tiếp tục Task 2. Checkpoint trên là lịch sử.
 
+**Task 2 đã hoàn tất:** `f7690a7`, scoped review Approved, 79 unit + batch e2e 1 + media 2 đạt; full suite còn đúng lỗi Task 4. Xem `docs/reviews/2026-10-08-task-2-verification.md`. Bước hiện tại tiếp theo là **Task 3**.
+
 ## Global Constraints
 
 - Giữ checkout hiện tại và nhánh feat/video-tool, commit từng task; không push/merge.
@@ -78,7 +80,7 @@ cargo test --lib review_duplicate_downloads_are_claimed_once
 **Files:** runner.rs, import.rs, tests cùng module.
 **Interfaces:** Giữ public protocol; explicit reprocess resolve music từ assignment/preset hiện tại, crash recovery giữ resolved music đã lưu.
 
-- [ ] Chạy:
+- [x] Chạy:
 
 ```powershell
 cargo test --lib review_recovery_restores_running_and_failure_guard
@@ -87,10 +89,10 @@ cargo test --lib review_reprocess_resolves_current_music
 cargo test --lib review_exact_filename_beats_ambiguous_stem
 ```
 
-- [ ] Recovery Sending/Rendering phải running=true, Pause dùng được và 3 failures cancel. Hậu kỳ về running=false sau kết thúc.
-- [ ] Ngoài A->B đã có, test no-music->music reprocess: resolved_music là track mới và không có Submit; assigned file mất dùng fallback hoặc silence, không crash.
-- [ ] Test a.jpg/a.png: explicit a.png chỉ sửa PNG; extensionless a mơ hồ vào unmatched. Case-insensitive và stem duy nhất vẫn dùng được.
-- [ ] RED/GREEN đầy đủ và review; commit riêng các sửa runner/import nếu còn thay đổi. Không đổi Submit trước Save chỉ để giữ test cũ.
+- [x] Recovery Sending/Rendering phải running=true, Pause dùng được và 3 failures cancel. Hậu kỳ về running=false sau kết thúc.
+- [x] Ngoài A->B đã có, test no-music->music reprocess: resolved_music là track mới và không có Submit; assigned file mất dùng fallback hoặc silence, không crash.
+- [x] Test a.jpg/a.png: explicit a.png chỉ sửa PNG; extensionless a mơ hồ vào unmatched. Case-insensitive và stem duy nhất vẫn dùng được.
+- [x] RED/GREEN đầy đủ và review; commit riêng các sửa runner/import nếu còn thay đổi. Không đổi Submit trước Save chỉ để giữ test cũ.
 
 ### Task 3: Preset flush/scoping và selected row
 
@@ -215,8 +217,8 @@ Get-FileHash -LiteralPath 'src-tauri/target/release/bundle/nsis/1Click Video Too
 Mở D:/1Click/Vids_Automation_1ClickStudio_v1.1.9.6/1click-video-tool.
 Đọc AGENTS.md, docs/HANDOFF-CODEX.md, docs/HANDOFF-CLAUDE.md và
 docs/superpowers/plans/2026-10-08-claude-code-finish-video-tool.md.
-Task 1 đã hoàn tất ở d2a708f, scoped review Approved, 70 unit tests đạt.
-Tiếp tục Task 2; full cargo test còn lỗi âm gốc không nhạc thuộc Task 4.
+Tasks 1–2 đã hoàn tất ở d2a708f/f7690a7, scoped review Approved, 79 unit tests đạt.
+Tiếp tục Task 3; full cargo test còn lỗi âm gốc không nhạc thuộc Task 4.
 Làm từng task theo TDD/review, commit cục bộ, không push/merge.
 Không đổi content-script generation flow. Core/tests phải đạt trước chạy thật,
 tối đa 3 rows, maxRetries=0. Phiên Codex chưa chạy generation nào.
