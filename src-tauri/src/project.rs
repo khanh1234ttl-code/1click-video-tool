@@ -20,16 +20,38 @@ pub fn save(project: &Project) -> Result<()> {
     write_atomic(&dir.join(PROJECT_FILE), &serde_json::to_vec_pretty(project)?)
 }
 
-/// Loads `<image_dir>/_1click/project.json`; the stored image_dir is replaced by `image_dir`
-/// so a moved folder keeps working.
+/// Loads `<image_dir>/_1click/project.json`. When the folder was moved, every stored path inside
+/// the old folder is moved along with it; paths elsewhere (a shared music folder) are kept.
 pub fn load(image_dir: &Path) -> Result<Option<Project>> {
     let file = image_dir.join("_1click").join(PROJECT_FILE);
     if !file.exists() {
         return Ok(None);
     }
     let mut p: Project = serde_json::from_slice(&fs::read(&file)?).with_context(|| format!("project.json hỏng: {}", file.display()))?;
-    p.image_dir = image_dir.to_path_buf();
+    if p.image_dir != image_dir {
+        rebase_project(&mut p, image_dir);
+    }
     Ok(Some(p))
+}
+
+fn rebase_project(p: &mut Project, new_dir: &Path) {
+    let old_dir = std::mem::replace(&mut p.image_dir, new_dir.to_path_buf());
+    let rebase = |path: &mut PathBuf| {
+        if let Ok(rel) = path.strip_prefix(&old_dir) {
+            *path = new_dir.join(rel);
+        }
+    };
+    let preset = &mut p.preset;
+    for path in [&mut preset.music.folder, &mut preset.output.folder, &mut preset.text.font_file].into_iter().flatten() {
+        rebase(path);
+    }
+    for row in &mut p.rows {
+        rebase(&mut row.image_path);
+        let font = row.text_override.as_mut().and_then(|t| t.font_file.as_mut());
+        for path in [row.music.as_mut(), row.raw_video.as_mut(), row.resolved_music.as_mut(), row.output.as_mut(), font].into_iter().flatten() {
+            rebase(path);
+        }
+    }
 }
 
 pub fn app_dir() -> PathBuf {
@@ -97,6 +119,52 @@ mod tests {
         let back = load(&dir).unwrap().unwrap();
         assert_eq!(back, p);
         assert!(!dir.join("_1click").join("project.json.tmp").exists());
+    }
+
+    #[test]
+    fn moved_project_rebases_paths_inside_the_old_folder() {
+        let tmp = tempfile::tempdir().unwrap();
+        let old = tmp.path().join("cũ");
+        let elsewhere = tmp.path().join("nhạc chung").join("song.mp3");
+        std::fs::create_dir_all(&old).unwrap();
+        let mut row = Row::new(1, old.join("ảnh 1.png"));
+        row.raw_video = Some(old.join("_1click").join("raw").join("001.mp4"));
+        row.output = Some(old.join("Output").join("001_ảnh 1.mp4"));
+        row.resolved_music = Some(old.join("music").join("a.mp3"));
+        row.music = Some(elsewhere.clone());
+        let mut p = Project::new(old.clone(), vec![row]);
+        p.preset.music.folder = Some(old.join("music"));
+        p.preset.output.folder = Some(old.join("Thành phẩm"));
+        p.preset.text.font_file = Some(old.join("font.ttf"));
+        save(&p).unwrap();
+
+        let new = tmp.path().join("mới");
+        std::fs::rename(&old, &new).unwrap();
+        let back = load(&new).unwrap().unwrap();
+        let r = &back.rows[0];
+        assert_eq!(back.image_dir, new);
+        assert_eq!(r.image_path, new.join("ảnh 1.png"));
+        assert_eq!(r.raw_video, Some(new.join("_1click").join("raw").join("001.mp4")));
+        assert_eq!(r.output, Some(new.join("Output").join("001_ảnh 1.mp4")));
+        assert_eq!(r.resolved_music, Some(new.join("music").join("a.mp3")));
+        assert_eq!(r.music, Some(elsewhere), "paths outside the project folder stay as they are");
+        assert_eq!(back.preset.music.folder, Some(new.join("music")));
+        assert_eq!(back.preset.output.folder, Some(new.join("Thành phẩm")));
+        assert_eq!(back.preset.text.font_file, Some(new.join("font.ttf")));
+    }
+
+    #[test]
+    fn moved_project_rebases_mixed_separator_paths() {
+        let tmp = tempfile::tempdir().unwrap();
+        let old = tmp.path().join("a");
+        std::fs::create_dir_all(&old).unwrap();
+        // Rows written by older builds join with '\' after a '/'-style image_dir.
+        let mixed = PathBuf::from(format!("{}\\01.png", old.to_string_lossy().replace('\\', "/")));
+        let p = Project::new(PathBuf::from(old.to_string_lossy().replace('\\', "/")), vec![Row::new(1, mixed)]);
+        save(&p).unwrap();
+        let new = tmp.path().join("b");
+        std::fs::rename(&old, &new).unwrap();
+        assert_eq!(load(&new).unwrap().unwrap().rows[0].image_path, new.join("01.png"));
     }
 
     #[test]
