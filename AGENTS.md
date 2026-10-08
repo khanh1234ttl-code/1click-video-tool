@@ -14,6 +14,8 @@ made, and environment facts. The plan and spec it points to are authoritative.
 After reading HANDOFF-CODEX.md, read `docs/HANDOFF-CLAUDE.md` and
 `docs/superpowers/plans/2026-10-08-claude-code-finish-video-tool.md`.
 The latter plan is the next work, requested by the user for Claude Code.
-Checkpoint `f23202f` is WIP and does not compile Rust; Tasks 11-12 are done,
-Task 13 live generation and the final desktop review fixes remain.
+Historical checkpoint `f23202f` was WIP. Task 1 of the continuation plan is now
+complete at `d2a708f`, scoped review approved, Rust unit 70/70 passing.
+Continue with Task 2. Full cargo test retains the known Task 4 original-audio mute failure.
+Tasks 11-12 are done; live generation and remaining desktop review fixes remain.
 Do not restart completed Tasks 1-10 or treat the old installer as a verified WIP build.

@@ -9,6 +9,8 @@
 **Original plan:** `D:/1Click/Vids_Automation_1ClickStudio_v1.1.9.6/docs/superpowers/plans/2026-10-08-1click-video-tool.md`.
 **Checkpoint:** `f23202f` (WIP chưa compile); đọc `docs/HANDOFF-CLAUDE.md` và `docs/reviews/2026-10-08-whole-branch-review.md`.
 
+**Tiến độ mới nhất:** Task 1 đã hoàn tất ở `d2a708f`, scoped re-review Approved. Rust compile và 70 unit tests đạt; e2e batch và 2 media tests đạt. Full suite còn regression âm gốc của Task 4. Xem `docs/reviews/2026-10-08-task-1-verification.md`; tiếp tục Task 2. Checkpoint trên là lịch sử.
+
 ## Global Constraints
 
 - Giữ checkout hiện tại và nhánh feat/video-tool, commit từng task; không push/merge.
@@ -43,9 +45,9 @@
 **Files:** engine.rs, runner.rs, tests/e2e.rs.
 **Interfaces:** WIP đã có `Effects = (u64, Vec<Effect>)`, State.epoch, State.operations và Operation snapshot. Helpers trả Effects; apply/submit còn Vec. Mọi asynchronous work phải mang identity từ dispatch tới publication.
 
-- [ ] Chạy trong src-tauri `cargo test --lib`: checkpoint hiện báo 10 E0308. Đây là refactor compile failure, chưa phải RED logic.
-- [ ] Chuyển apply nhận Effects, destructure epoch + queue; submit nhận epoch và trả batch đúng epoch. Không bỏ epoch để chữa type error.
-- [ ] Claim Operation đồng bộ trước tokio::spawn/semaphore wait. Capture project paths/preset/row gốc; không lấy project hiện tại sau await để chọn I/O. Kiểm tra predicate sau trong cùng transaction với send/publish:
+- [x] Chạy trong src-tauri `cargo test --lib`: checkpoint hiện báo 10 E0308. Đây là refactor compile failure, chưa phải RED logic.
+- [x] Chuyển apply nhận Effects, destructure epoch + queue; submit nhận epoch và trả batch đúng epoch. Không bỏ epoch để chữa type error.
+- [x] Claim Operation đồng bộ trước tokio::spawn/semaphore wait. Capture project paths/preset/row gốc; không lấy project hiện tại sau await để chọn I/O. Kiểm tra predicate sau trong cùng transaction với send/publish:
 
 ```rust
 fn operation_matches(st: &State, op: &Operation) -> bool {
@@ -56,10 +58,10 @@ fn operation_matches(st: &State, op: &Operation) -> bool {
 }
 ```
 
-- [ ] Open project tăng epoch; Pause invalidates operations. Raw/output ghi file tạm riêng epoch/opId rồi publish final chỉ khi identity còn đúng; stale chỉ xóa temp của chính nó.
-- [ ] Serialize mutation/snapshot/save dưới mutex đồng bộ. Save lỗi phải rollback/propagate, không chỉ toast và giữ unsaved state. Effect::Save cũ không được ghi snapshot ngoài transaction. Start persist Sending/jobId trước dispatch.
-- [ ] Emit running trước encode và sau local completion/retry/reprocess. Recheck epoch/active job sau encode và trước image.put/job.submit. Stale JobRejected/revert không dừng job mới.
-- [ ] Chạy regression đã có sau sửa compile:
+- [x] Open project tăng epoch; Pause invalidates operations. Raw/output ghi file tạm riêng epoch/opId rồi publish final chỉ khi identity còn đúng; stale chỉ xóa temp của chính nó.
+- [x] Serialize mutation/snapshot/save dưới mutex đồng bộ. Save lỗi phải rollback/propagate, không chỉ toast và giữ unsaved state. Effect::Save cũ không được ghi snapshot ngoài transaction. Start persist Sending/jobId trước dispatch.
+- [x] Emit running trước encode và sau local completion/retry/reprocess. Recheck epoch/active job sau encode và trước image.put/job.submit. Stale JobRejected/revert không dừng job mới.
+- [x] Chạy regression đã có sau sửa compile:
 
 ```powershell
 cargo test --lib review_concurrent_edits_are_durable_and_ordered
@@ -68,8 +70,8 @@ cargo test --lib review_stale_rejections_do_not_stop_new_job
 cargo test --lib review_duplicate_downloads_are_claimed_once
 ```
 
-- [ ] Thêm deterministic tests dùng Barrier/Notify/semaphore: pause lúc encode => không Submit; pause lúc import => không cập nhật raw/row; A->B khi queued/running FFmpeg => B Pending, không nhận output A; duplicate downloaded/query => đúng một import/hậu kỳ; save failure => transport không nhận generation.
-- [ ] Chứng minh RED/GREEN của regression có sẵn bằng controlled baseline ở copy tạm hoặc đảo riêng fix tương ứng rồi phục hồi; không reset branch chính. Review task và cargo test --lib; commit `fix: scope engine operations and serialize durable state`.
+- [x] Thêm deterministic tests dùng Barrier/Notify/semaphore: pause lúc encode => không Submit; pause lúc import => không cập nhật raw/row; A->B khi queued/running FFmpeg => B Pending, không nhận output A; duplicate downloaded/query => đúng một import/hậu kỳ; save failure => transport không nhận generation.
+- [x] Chứng minh RED/GREEN của regression có sẵn bằng controlled baseline ở copy tạm hoặc đảo riêng fix tương ứng rồi phục hồi; không reset branch chính. Review task và cargo test --lib; commit `fix: scope engine operations and serialize durable state`.
 
 ### Task 2: Runner recovery, đổi nhạc và import
 
@@ -213,7 +215,8 @@ Get-FileHash -LiteralPath 'src-tauri/target/release/bundle/nsis/1Click Video Too
 Mở D:/1Click/Vids_Automation_1ClickStudio_v1.1.9.6/1click-video-tool.
 Đọc AGENTS.md, docs/HANDOFF-CODEX.md, docs/HANDOFF-CLAUDE.md và
 docs/superpowers/plans/2026-10-08-claude-code-finish-video-tool.md.
-Tiếp tục từ WIP f23202f: engine còn refactor Effects dở và chưa compile.
+Task 1 đã hoàn tất ở d2a708f, scoped review Approved, 70 unit tests đạt.
+Tiếp tục Task 2; full cargo test còn lỗi âm gốc không nhạc thuộc Task 4.
 Làm từng task theo TDD/review, commit cục bộ, không push/merge.
 Không đổi content-script generation flow. Core/tests phải đạt trước chạy thật,
 tối đa 3 rows, maxRetries=0. Phiên Codex chưa chạy generation nào.
