@@ -54,3 +54,35 @@ describe("TextPreview redraws", () => {
     expect(lastDraw()[3]).toBe("mới");
   });
 });
+
+const baseStyle = (): TextStyle => ({ ...style });
+describe("frame sizing and background", () => {
+  it("keeps a 9:16 frame narrow enough for its height instead of stretching to full width", async () => {
+    const t = document.createElement("div"); document.body.append(t);
+    const c = mount(TextPreview, { target: t, props: { style: baseStyle(), text: "A", w: 720, h: 1280, maxHeight: "55vh" } });
+    await tick();
+    const frame = t.querySelector<HTMLDivElement>(".frame")!;
+    expect(frame.getAttribute("style")).toContain("aspect-ratio: 720 / 1280");
+    expect(frame.getAttribute("style")).toContain("--max-w: calc(55vh * 720 / 1280)");
+    unmount(c); t.remove();
+  });
+  it("plays the raw video behind the text when one exists", async () => {
+    const t = document.createElement("div"); document.body.append(t);
+    const c = mount(TextPreview, { target: t, props: { style: baseStyle(), text: "A", w: 1280, h: 720, imagePath: "A/1.png", videoPath: "A/_1click/raw/001.mp4" } });
+    await tick();
+    const video = t.querySelector("video")!;
+    expect(video.getAttribute("src")).toBe("A/_1click/raw/001.mp4");
+    expect(video.muted).toBe(true);
+    video.dispatchEvent(new Event("error")); await tick();
+    expect(t.querySelector("video")).toBeNull();
+    unmount(c); t.remove();
+  });
+  it("shows only the image when there is no raw video", async () => {
+    const t = document.createElement("div"); document.body.append(t);
+    const c = mount(TextPreview, { target: t, props: { style: baseStyle(), text: "A", w: 1280, h: 720, imagePath: "A/1.png" } });
+    await tick();
+    expect(t.querySelector("video")).toBeNull();
+    expect(t.querySelector<HTMLDivElement>(".frame")!.getAttribute("style")).toContain("A/1.png");
+    unmount(c); t.remove();
+  });
+});
