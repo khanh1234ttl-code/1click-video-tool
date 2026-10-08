@@ -1,0 +1,402 @@
+//! Pure batch state machine: inputs are user actions and extension messages, outputs are Effects
+//! that the engine executes (send, copy, ffmpeg, save, notify).
+use crate::bridge::{FromExt, ToExt};
+use crate::model::{Project, Row, RowStatus, Stage};
+use crate::music::pick_music;
+use rand::Rng;
+use std::collections::BTreeSet;
+use std::path::PathBuf;
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Effect {
+    /// Encode the rows' images and send image.put + job.submit.
+    Submit { job_id: String, stts: Vec<u32> },
+    Send(ToExt),
+    /// Copy the downloaded file into the project and probe it, then call `on_raw_ready`.
+    ImportRaw { stt: u32, from: PathBuf },
+    PostProcess(u32),
+    Save,
+    Changed,
+    Notify(String),
+}
+
+pub const FAILURE_STREAK_LIMIT: u32 = 3;
+
+pub struct Runner {
+    pub project: Project,
+    pub running: bool,
+    failure_streak: u32,
+    job_counter: u64,
+}
+
+impl Runner {
+    pub fn new(project: Project) -> Self {
+        Self { project, running: false, failure_streak: 0, job_counter: 0 }
+    }
+
+    fn new_job_id(&mut self) -> String {
+        self.job_counter += 1;
+        let ms = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_millis()).unwrap_or(0);
+        format!("j{ms}-{}", self.job_counter)
+    }
+
+    fn active_row(&mut self, job_id: &str, stt: u32) -> Option<&mut Row> {
+        self.project.rows.iter_mut().find(|r| r.stt == stt && r.job_id.as_deref() == Some(job_id) && r.status.is_active())
+    }
+
+    fn reset_active(&mut self, job_id: Option<&str>) {
+        for r in self.project.rows.iter_mut().filter(|r| r.status.is_active() && job_id.map_or(true, |j| r.job_id.as_deref() == Some(j))) {
+            r.status = RowStatus::Pending;
+            r.job_id = None;
+        }
+    }
+
+    fn refresh_running(&mut self) {
+        if !self.project.rows.iter().any(|r| r.status.is_active()) {
+            self.running = false;
+        }
+    }
+
+    pub fn start(&mut self, tracks: &[PathBuf], rng: &mut impl Rng) -> Result<Vec<Effect>, String> {
+        let stts: Vec<u32> = self.project.rows.iter().filter(|r| r.status == RowStatus::Pending).map(|r| r.stt).collect();
+        if stts.is_empty() {
+            return Err("Không có dòng nào đang chờ".into());
+        }
+        let missing: Vec<String> = self.project.rows.iter().filter(|r| stts.contains(&r.stt) && self.project.effective_prompt(r).is_empty()).map(|r| r.stt.to_string()).collect();
+        if !missing.is_empty() {
+            return Err(format!("Các dòng chưa có prompt: {}", missing.join(", ")));
+        }
+        let assigned: Vec<Option<PathBuf>> = stts.iter().map(|s| self.project.row(*s).and_then(|r| r.music.clone())).collect();
+        let m = &self.project.preset.music;
+        let picks = pick_music(&assigned, m.mode, m.fallback, tracks, rng);
+        let job_id = self.new_job_id();
+        for (stt, pick) in stts.iter().zip(picks) {
+            let r = self.project.row_mut(*stt).expect("stt from rows");
+            r.resolved_music = pick;
+            r.status = RowStatus::Sending;
+            r.job_id = Some(job_id.clone());
+            r.raw_video = None;
+            r.output = None;
+        }
+        self.running = true;
+        self.failure_streak = 0;
+        Ok(vec![Effect::Submit { job_id, stts }, Effect::Save, Effect::Changed])
+    }
+
+    /// The engine could not deliver the job (extension disconnected).
+    pub fn revert_submit(&mut self, job_id: &str, reason: &str) -> Vec<Effect> {
+        self.reset_active(Some(job_id));
+        self.running = false;
+        vec![Effect::Notify(reason.to_string()), Effect::Save, Effect::Changed]
+    }
+
+    fn fail_generate(&mut self, job_id: &str, stt: u32, error: String) -> Vec<Effect> {
+        let Some(r) = self.active_row(job_id, stt) else { return vec![] };
+        r.status = RowStatus::Failed { stage: Stage::Generate, message: error };
+        self.failure_streak += 1;
+        let mut fx = vec![];
+        if self.failure_streak >= FAILURE_STREAK_LIMIT && self.running {
+            self.running = false;
+            self.reset_active(Some(job_id));
+            fx.push(Effect::Send(ToExt::JobCancel { job_id: job_id.to_string() }));
+            fx.push(Effect::Notify("3 dòng lỗi liên tiếp — đã tạm dừng. Có thể đã hết lượt tạo Veo hôm nay.".into()));
+        }
+        self.refresh_running();
+        fx.extend([Effect::Save, Effect::Changed]);
+        fx
+    }
+
+    pub fn on_message(&mut self, msg: FromExt) -> Vec<Effect> {
+        match msg {
+            FromExt::JobRejected { job_id, error } => {
+                self.reset_active(Some(&job_id));
+                self.running = false;
+                vec![Effect::Notify(error), Effect::Save, Effect::Changed]
+            }
+            FromExt::ItemProgress { job_id, index, percent } => match self.active_row(&job_id, index) {
+                Some(r) => {
+                    r.status = RowStatus::Rendering { percent: percent.min(100) };
+                    vec![Effect::Changed]
+                }
+                None => vec![],
+            },
+            FromExt::ItemDownloaded { job_id, index, file_path } => match self.active_row(&job_id, index) {
+                Some(_) => vec![Effect::ImportRaw { stt: index, from: file_path.into() }],
+                None => vec![],
+            },
+            FromExt::ItemFailed { job_id, index, error } => self.fail_generate(&job_id, index, error),
+            FromExt::JobStatus { job_id, known, done, failed, .. } => {
+                if !known {
+                    self.reset_active(Some(&job_id));
+                    self.refresh_running();
+                    return vec![Effect::Save, Effect::Changed];
+                }
+                let mut fx = vec![];
+                for d in done {
+                    if self.active_row(&job_id, d.index).is_some() {
+                        fx.push(Effect::ImportRaw { stt: d.index, from: d.file_path.into() });
+                    }
+                }
+                for f in failed {
+                    fx.extend(self.fail_generate(&job_id, f.index, f.error));
+                }
+                fx
+            }
+            FromExt::Hello { .. } | FromExt::JobAccepted { .. } | FromExt::Pong => vec![],
+        }
+    }
+
+    pub fn on_raw_ready(&mut self, stt: u32, result: Result<PathBuf, String>) -> Vec<Effect> {
+        let Some(r) = self.project.row_mut(stt) else { return vec![] };
+        let fx = match result {
+            Ok(p) => {
+                r.raw_video = Some(p);
+                r.status = RowStatus::Downloaded;
+                self.failure_streak = 0;
+                vec![Effect::PostProcess(stt), Effect::Save, Effect::Changed]
+            }
+            Err(e) => {
+                r.status = RowStatus::Failed { stage: Stage::Download, message: e };
+                vec![Effect::Save, Effect::Changed]
+            }
+        };
+        self.refresh_running();
+        fx
+    }
+
+    pub fn on_postprocess_started(&mut self, stt: u32) -> Vec<Effect> {
+        match self.project.row_mut(stt) {
+            Some(r) => {
+                r.status = RowStatus::PostProcessing;
+                vec![Effect::Changed]
+            }
+            None => vec![],
+        }
+    }
+
+    pub fn on_postprocess_done(&mut self, stt: u32, result: Result<PathBuf, String>) -> Vec<Effect> {
+        let Some(r) = self.project.row_mut(stt) else { return vec![] };
+        match result {
+            Ok(out) => {
+                r.output = Some(out);
+                r.status = RowStatus::Done;
+            }
+            Err(e) => r.status = RowStatus::Failed { stage: Stage::PostProcess, message: e },
+        }
+        vec![Effect::Save, Effect::Changed]
+    }
+
+    pub fn pause(&mut self) -> Vec<Effect> {
+        let jobs: BTreeSet<String> = self.project.rows.iter().filter(|r| r.status.is_active()).filter_map(|r| r.job_id.clone()).collect();
+        self.reset_active(None);
+        self.running = false;
+        let mut fx: Vec<Effect> = jobs.into_iter().map(|job_id| Effect::Send(ToExt::JobCancel { job_id })).collect();
+        fx.extend([Effect::Save, Effect::Changed]);
+        fx
+    }
+
+    /// Failed rows: post-processing failures with a raw video only redo post-processing;
+    /// anything else goes back to Pending (the next Start regenerates it).
+    pub fn retry(&mut self, stts: &[u32]) -> Vec<Effect> {
+        let mut fx = vec![];
+        for stt in stts {
+            let Some(r) = self.project.row_mut(*stt) else { continue };
+            match &r.status {
+                RowStatus::Failed { stage: Stage::PostProcess, .. } if r.raw_video.is_some() => fx.push(Effect::PostProcess(*stt)),
+                RowStatus::Failed { .. } => {
+                    r.status = RowStatus::Pending;
+                    r.job_id = None;
+                    r.raw_video = None;
+                    r.output = None;
+                }
+                _ => {}
+            }
+        }
+        fx.extend([Effect::Save, Effect::Changed]);
+        fx
+    }
+
+    pub fn reprocess(&mut self, stts: &[u32]) -> Vec<Effect> {
+        self.project
+            .rows
+            .iter()
+            .filter(|r| stts.contains(&r.stt) && r.raw_video.is_some() && matches!(r.status, RowStatus::Done | RowStatus::Downloaded | RowStatus::Failed { stage: Stage::PostProcess, .. }))
+            .map(|r| Effect::PostProcess(r.stt))
+            .collect()
+    }
+
+    pub fn on_connected(&self) -> Vec<Effect> {
+        let jobs: BTreeSet<String> = self.project.rows.iter().filter(|r| r.status.is_active()).filter_map(|r| r.job_id.clone()).collect();
+        jobs.into_iter().map(|job_id| Effect::Send(ToExt::JobQuery { job_id })).collect()
+    }
+
+    /// After reopening a project: unfinished post-processing is queued again; rows still waiting
+    /// on the extension stay active until `on_connected` queries their job.
+    pub fn recover_after_load(&mut self) -> Vec<Effect> {
+        let mut fx = vec![];
+        for r in self.project.rows.iter_mut() {
+            if matches!(r.status, RowStatus::PostProcessing | RowStatus::Downloaded) {
+                if r.raw_video.as_ref().map_or(false, |p| p.exists()) {
+                    r.status = RowStatus::Downloaded;
+                    fx.push(Effect::PostProcess(r.stt));
+                } else {
+                    r.status = RowStatus::Pending;
+                    r.raw_video = None;
+                }
+            }
+        }
+        fx.push(Effect::Changed);
+        fx
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::model::{Project, Row, RowStatus, Stage};
+    use rand::{rngs::StdRng, SeedableRng};
+
+    fn runner(n: u32) -> Runner {
+        let rows = (1..=n).map(|i| {
+            let mut r = Row::new(i, format!("C:/i/{i}.jpg").into());
+            r.prompt = format!("p{i}");
+            r
+        }).collect();
+        Runner::new(Project::new("C:/i".into(), rows))
+    }
+
+    fn started(n: u32) -> (Runner, String) {
+        let mut r = runner(n);
+        let fx = r.start(&[], &mut StdRng::seed_from_u64(1)).unwrap();
+        let Effect::Submit { job_id, stts } = &fx[0] else { panic!("{fx:?}") };
+        assert_eq!(stts, &(1..=n).collect::<Vec<_>>());
+        (r, job_id.clone())
+    }
+
+    fn status(r: &Runner, stt: u32) -> RowStatus {
+        r.project.row(stt).unwrap().status.clone()
+    }
+
+    #[test]
+    fn start_refuses_rows_without_prompt() {
+        let mut r = runner(3);
+        r.project.rows[1].prompt.clear();
+        r.project.rows[2].prompt = "  ".into();
+        let err = r.start(&[], &mut StdRng::seed_from_u64(1)).unwrap_err();
+        assert!(err.contains("2, 3"), "{err}");
+        assert!(r.project.rows.iter().all(|x| x.status == RowStatus::Pending));
+        r.project.common_prompt = "chung".into();
+        assert!(r.start(&[], &mut StdRng::seed_from_u64(1)).is_ok());
+    }
+
+    #[test]
+    fn start_assigns_music_and_marks_sending() {
+        let mut r = runner(2);
+        let tracks = vec![std::path::PathBuf::from("a.mp3")];
+        r.start(&tracks, &mut StdRng::seed_from_u64(1)).unwrap();
+        assert!(r.running);
+        assert!(r.project.rows.iter().all(|x| x.status == RowStatus::Sending && x.resolved_music.is_some() && x.job_id.is_some()));
+    }
+
+    #[test]
+    fn downloads_out_of_order_map_by_stt() {
+        let (mut r, job) = started(3);
+        let fx = r.on_message(FromExt::ItemProgress { job_id: job.clone(), index: 2, percent: 40 });
+        assert_eq!(status(&r, 2), RowStatus::Rendering { percent: 40 });
+        assert_eq!(fx, vec![Effect::Changed]);
+        let fx = r.on_message(FromExt::ItemDownloaded { job_id: job.clone(), index: 3, file_path: "D:/dl/003_x.mp4".into() });
+        assert_eq!(fx, vec![Effect::ImportRaw { stt: 3, from: "D:/dl/003_x.mp4".into() }]);
+        let fx = r.on_raw_ready(3, Ok("C:/i/_1click/raw/003.mp4".into()));
+        assert_eq!(fx[0], Effect::PostProcess(3));
+        assert_eq!(status(&r, 3), RowStatus::Downloaded);
+        assert_eq!(status(&r, 1), RowStatus::Sending);
+        // a download for another job is ignored
+        assert!(r.on_message(FromExt::ItemDownloaded { job_id: "other".into(), index: 1, file_path: "x".into() }).is_empty());
+    }
+
+    #[test]
+    fn three_consecutive_failures_pause_and_cancel() {
+        let (mut r, job) = started(5);
+        for i in 1..=2 {
+            r.on_message(FromExt::ItemFailed { job_id: job.clone(), index: i, error: "Veo từ chối".into() });
+        }
+        assert!(r.running);
+        let fx = r.on_message(FromExt::ItemFailed { job_id: job.clone(), index: 3, error: "Veo từ chối".into() });
+        assert!(!r.running);
+        assert!(fx.contains(&Effect::Send(ToExt::JobCancel { job_id: job.clone() })));
+        assert!(fx.iter().any(|e| matches!(e, Effect::Notify(m) if m.contains("3 dòng lỗi liên tiếp"))));
+        assert_eq!(status(&r, 3), RowStatus::Failed { stage: Stage::Generate, message: "Veo từ chối".into() });
+        assert_eq!(status(&r, 4), RowStatus::Pending);
+    }
+
+    #[test]
+    fn a_success_resets_the_failure_streak() {
+        let (mut r, job) = started(5);
+        r.on_message(FromExt::ItemFailed { job_id: job.clone(), index: 1, error: "e".into() });
+        r.on_message(FromExt::ItemFailed { job_id: job.clone(), index: 2, error: "e".into() });
+        r.on_raw_ready(3, Ok("raw3".into()));
+        let fx = r.on_message(FromExt::ItemFailed { job_id: job.clone(), index: 4, error: "e".into() });
+        assert!(!fx.iter().any(|e| matches!(e, Effect::Notify(_) | Effect::Send(ToExt::JobCancel { .. }))), "{fx:?}");
+        assert!(r.running, "row 5 is still rendering");
+        assert_eq!(status(&r, 5), RowStatus::Sending);
+    }
+
+    #[test]
+    fn late_messages_after_pause_are_ignored() {
+        let (mut r, job) = started(2);
+        let fx = r.pause();
+        assert!(fx.contains(&Effect::Send(ToExt::JobCancel { job_id: job.clone() })));
+        assert!(r.project.rows.iter().all(|x| x.status == RowStatus::Pending && x.job_id.is_none()));
+        assert!(r.on_message(FromExt::ItemDownloaded { job_id: job.clone(), index: 1, file_path: "x".into() }).is_empty());
+        assert!(r.on_message(FromExt::ItemProgress { job_id: job, index: 2, percent: 9 }).is_empty());
+        assert_eq!(status(&r, 2), RowStatus::Pending);
+    }
+
+    #[test]
+    fn rejected_job_returns_rows_to_pending() {
+        let (mut r, job) = started(2);
+        let fx = r.on_message(FromExt::JobRejected { job_id: job, error: "Cần đăng nhập Google".into() });
+        assert!(fx.contains(&Effect::Notify("Cần đăng nhập Google".into())));
+        assert!(!r.running);
+        assert!(r.project.rows.iter().all(|x| x.status == RowStatus::Pending));
+    }
+
+    #[test]
+    fn retry_regenerates_or_only_reprocesses() {
+        let (mut r, job) = started(2);
+        r.on_message(FromExt::ItemFailed { job_id: job, index: 1, error: "e".into() });
+        r.on_raw_ready(2, Ok("raw2".into()));
+        r.on_postprocess_done(2, Err("ffmpeg lỗi".into()));
+        let fx = r.retry(&[1, 2]);
+        assert_eq!(status(&r, 1), RowStatus::Pending);
+        assert!(fx.contains(&Effect::PostProcess(2)));
+        assert_eq!(r.project.row(2).unwrap().raw_video.as_deref(), Some(std::path::Path::new("raw2")));
+    }
+
+    #[test]
+    fn reconnect_queries_active_jobs_and_unknown_jobs_reset() {
+        let (mut r, job) = started(2);
+        assert_eq!(r.on_connected(), vec![Effect::Send(ToExt::JobQuery { job_id: job.clone() })]);
+        r.on_message(FromExt::JobStatus { job_id: job.clone(), known: false, done: vec![], failed: vec![], pending: vec![] });
+        assert!(r.project.rows.iter().all(|x| x.status == RowStatus::Pending));
+    }
+
+    #[test]
+    fn job_status_imports_finished_items() {
+        let (mut r, job) = started(2);
+        let fx = r.on_message(FromExt::JobStatus { job_id: job.clone(), known: true, done: vec![crate::bridge::DoneItem { index: 2, file_path: "f2".into() }], failed: vec![], pending: vec![1] });
+        assert_eq!(fx, vec![Effect::ImportRaw { stt: 2, from: "f2".into() }]);
+    }
+
+    #[test]
+    fn recover_after_load_requeues_postprocessing() {
+        let (mut r, _job) = started(1);
+        let tmp = tempfile::tempdir().unwrap();
+        let raw = tmp.path().join("001.mp4");
+        std::fs::write(&raw, b"x").unwrap();
+        r.on_raw_ready(1, Ok(raw));
+        r.on_postprocess_started(1);
+        let fx = r.recover_after_load();
+        assert_eq!(fx[0], Effect::PostProcess(1));
+        assert_eq!(status(&r, 1), RowStatus::Downloaded);
+    }
+}
