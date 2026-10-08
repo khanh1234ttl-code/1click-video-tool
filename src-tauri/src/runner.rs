@@ -22,6 +22,7 @@ pub enum Effect {
 
 pub const FAILURE_STREAK_LIMIT: u32 = 3;
 
+#[derive(Clone)]
 pub struct Runner {
     pub project: Project,
     pub running: bool,
@@ -94,6 +95,7 @@ impl Runner {
     fn fail_generate(&mut self, job_id: &str, stt: u32, error: String) -> Vec<Effect> {
         let Some(r) = self.active_row(job_id, stt) else { return vec![] };
         r.status = RowStatus::Failed { stage: Stage::Generate, message: error };
+        self.importing.remove(&stt);
         self.failure_streak += 1;
         let mut fx = vec![];
         if self.failure_streak >= FAILURE_STREAK_LIMIT && self.running {
