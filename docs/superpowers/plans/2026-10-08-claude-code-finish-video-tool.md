@@ -150,8 +150,8 @@ pub fn build_args(
 
 **Files:** docs/reviews/2026-10-08-fix-verification.md.
 
-- [ ] Review `git diff 3e27fa8...HEAD` so với 7 Important findings. Mỗi finding có RED/GREEN + addressed/residual verdict; không claim toàn nhánh đạt khi còn Important.
-- [ ] Bridge git == installed; content script/worker asset cũ == backup. Chạy riêng từng command, kiểm tra exit codes:
+- [x] Review `git diff 3e27fa8...HEAD` so với 7 Important findings. Mỗi finding có RED/GREEN + addressed/residual verdict; không claim toàn nhánh đạt khi còn Important.
+- [x] Bridge git == installed; content script/worker asset cũ == backup. Chạy riêng từng command, kiểm tra exit codes:
 
 ```powershell
 npm test
@@ -163,9 +163,9 @@ Pop-Location
 git diff --check
 ```
 
-- [ ] Đóng đúng dev app nếu cargo bị khóa EXE; không kill mọi Node/Chrome.
-- [ ] Ghi counts/evidence và residual Minor: moved-project rebasing, paste default selected row, shadow khi stroke=0, TOFU concurrent initial handshake, Dừng/custom output naming khác giữa spec/plan. Không nói các mục chưa sửa đã đạt. Preview/ffprobe thuộc Task5.
-- [ ] Commit verification report, giữ branch cục bộ.
+- [x] Đóng đúng dev app nếu cargo bị khóa EXE; không kill mọi Node/Chrome.
+- [x] Ghi counts/evidence và residual Minor: moved-project rebasing, paste default selected row, shadow khi stroke=0, TOFU concurrent initial handshake, Dừng/custom output naming khác giữa spec/plan. Không nói các mục chưa sửa đã đạt. Preview/ffprobe thuộc Task5.
+- [x] Commit verification report, giữ branch cục bộ.
 
 ### Task 7: Reload và chạy thật tối đa 3 rows
 
