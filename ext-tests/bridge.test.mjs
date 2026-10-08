@@ -18,7 +18,7 @@ async function within(promise, milliseconds, message) {
   } finally { clearTimeout(timer); }
 }
 
-function mockChrome({ loginRedirect = false, reply, storedJobs } = {}) {
+function mockChrome({ loginRedirect = false, reply, storedJobs, restoreGate } = {}) {
   const listeners = { runtime: [], downloads: [], alarms: [] };
   const sent = [];
   const tabs = loginRedirect ? [] : [{ id: 7, url: "https://docs.google.com/videos/d/abc/edit", status: "complete" }];
@@ -37,7 +37,7 @@ function mockChrome({ loginRedirect = false, reply, storedJobs } = {}) {
     windows: { create: async () => ({ tabs: [{ id: 99 }] }) },
     downloads: { onChanged: { addListener: (f) => listeners.downloads.push(f) }, search: async ({ id }) => [{ id, filename: chrome.__files[id] }] },
     alarms: { create: () => {}, onAlarm: { addListener: (f) => listeners.alarms.push(f) } },
-    storage: { session: { get: async (k) => ({ [k]: store[k] }), set: async (o) => Object.assign(store, o) } },
+    storage: { session: { get: async (k) => { await restoreGate; return { [k]: store[k] }; }, set: async (o) => Object.assign(store, o) } },
     __files: {},
   };
   return { chrome, listeners, sent };
@@ -74,6 +74,7 @@ async function setup(t, opts) {
     clearTimeout: (timer) => { clearTimeout(timer); timers.delete(timer); },
   });
   vm.runInContext(await readFile(BRIDGE, "utf8"), context, { filename: BRIDGE });
+  await opts?.beforeConnect?.({ chrome, listeners });
   const ws = await within(conn, 2000, "bridge did not connect");
   const next = async (type, timeout = 2000) => {
     for (let i = 0; i < timeout / 20; i++) {
@@ -236,4 +237,54 @@ test("not logged in → job.rejected", async (t) => {
   ws.send(JSON.stringify({ ...submit, items: [submit.items[0]] }));
   const r = await next("job.rejected");
   assert.match(r.error, /đăng nhập Google/);
+});
+
+for (const phase of ["CHECK_VIDS_PAGE", "PREPARE_IMAGE", "AUTO_FILL_VIDS"]) {
+  test(`cancel during ${phase} ${phase === "AUTO_FILL_VIDS" ? "forwards cancellation and suppresses acceptance" : "prevents generation after preparation resumes"}`, async (t) => {
+    let release;
+    const blocked = new Promise((resolve) => { release = resolve; });
+    let entered;
+    const started = new Promise((resolve) => { entered = resolve; });
+    t.after(release);
+    const { ws, next, sent, inbox } = await setup(t, { reply: async (msg) => {
+      if (msg.type === phase) { entered(); await blocked; }
+    } });
+    await next("hello");
+    putImages(ws);
+    ws.send(JSON.stringify(submit));
+    await within(started, 2000, "preparation never started");
+    ws.send(JSON.stringify({ type: "job.cancel", jobId: "j1" }));
+    ws.send(JSON.stringify({ type: "ping" }));
+    await next("pong"); // Barrier: cancel was handled before releasing preparation.
+    release();
+    const rejected = await next("job.rejected");
+    assert.equal(rejected.jobId, "j1");
+    assert.equal(sent.filter((s) => s.msg.type === "AUTO_FILL_VIDS").length, phase === "AUTO_FILL_VIDS" ? 1 : 0);
+    if (phase === "AUTO_FILL_VIDS") assert.ok(sent.some((s) => s.msg.type === "CANCEL_PROMPT_GROUP" && s.msg.groupId === "j1"));
+    assert.equal(inbox.filter((m) => m.type === "job.accepted").length, 0);
+  });
+}
+
+test("download during startup restore is retained for later job.query", async (t) => {
+  let release;
+  const restoreGate = new Promise((resolve) => { release = resolve; });
+  t.after(release);
+  let delivery;
+  const filePath = "E:/AFF cám/THÁNG 10/1ClickBridge/saved/001_cat_a.mp4";
+  const { ws, next } = await setup(t, {
+    restoreGate,
+    storedJobs: { saved: { tabId: 7, items: { 1: { state: "pending" } } } },
+    beforeConnect: async ({ chrome, listeners }) => {
+      chrome.__files[5] = filePath;
+      delivery = Promise.all(listeners.downloads.map((f) => f({ id: 5, state: { current: "complete" } })));
+      await new Promise((r) => setImmediate(r)); // Event reaches storage boundary before hydration.
+      release();
+      await delivery;
+    },
+  });
+  await next("hello");
+  ws.send(JSON.stringify({ type: "job.query", jobId: "saved" }));
+  const status = await next("job.status");
+  assert.deepEqual(status.done, [{ index: 1, filePath }]);
+  assert.deepEqual(status.pending, []);
 });

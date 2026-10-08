@@ -9,8 +9,10 @@ const FILE_RE = /[\\/]1ClickBridge[\\/]([^\\/]+)[\\/](\d{3})_/;
 let ws = null;
 let reconnectTimer = null;
 const images = new Map(); // imageId -> { base64, name } until the job is submitted
-const submitting = new Set();
+const submitting = new Map();
 let jobs = {}; // jobId -> { tabId, items: { [index]: { state, filePath?, error? } } }
+const jobsReady = chrome.storage.session.get("oneclickJobs")
+  .then((r) => { jobs = (r && r.oneclickJobs) || {}; }).catch(() => {});
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const send = (msg) => ws && ws.readyState === 1 && ws.send(JSON.stringify(msg));
@@ -65,6 +67,7 @@ async function ensureVidsTab() {
 }
 
 async function handle(msg) {
+  await jobsReady;
   switch (msg.type) {
     case "ping":
       return send({ type: "pong" });
@@ -78,14 +81,18 @@ async function handle(msg) {
         items.forEach((it) => images.delete(it.imageId));
         return send({ type: "job.accepted", jobId });
       }
-      submitting.add(jobId);
+      const submission = { cancelled: false };
+      submitting.set(jobId, submission);
+      const checkCancelled = () => { if (submission.cancelled) throw new Error("Đã hủy job"); };
       let tabId;
       try {
         tabId = await ensureVidsTab();
+        checkCancelled();
         for (const it of items) {
           const data = images.get(it.imageId);
           if (!data) throw new Error(`Thiếu ảnh ${it.imageId}`);
           const prepared = await chrome.tabs.sendMessage(tabId, { type: "PREPARE_IMAGE", id: it.imageId, data });
+          checkCancelled();
           if (!prepared || prepared.success === false) throw new Error((prepared && prepared.error) || "Extension không nhận ảnh");
         }
         const payloads = items.map((it) => ({
@@ -97,6 +104,7 @@ async function handle(msg) {
         jobs[jobId] = { tabId, items: Object.fromEntries(items.map((it) => [it.index, { state: "pending" }])) };
         saveJobs();
         const r = await chrome.tabs.sendMessage(tabId, { type: "AUTO_FILL_VIDS", payloads, groupId: jobId, concurrentPrompts: settings.concurrency });
+        checkCancelled();
         if (!r || r.success === false) throw new Error((r && r.error) || "Extension không nhận job");
       } catch (e) {
         delete jobs[jobId];
@@ -110,6 +118,8 @@ async function handle(msg) {
       return send({ type: "job.accepted", jobId });
     }
     case "job.cancel": {
+      const submission = submitting.get(msg.jobId);
+      if (submission) submission.cancelled = true;
       const job = jobs[msg.jobId];
       if (job) await chrome.tabs.sendMessage(job.tabId, { type: "CANCEL_PROMPT_GROUP", groupId: msg.jobId }).catch(() => {});
       return;
@@ -136,7 +146,7 @@ function setItem(jobId, index, patch) {
   return true;
 }
 
-chrome.runtime.onMessage.addListener((m) => {
+function handleRuntimeMessage(m) {
   if (!m || !m.data) return false;
   if (m.type === "VIDEO_GENERATION_PROGRESS") {
     const { groupId, promptIndex, percentage } = m.data;
@@ -161,11 +171,17 @@ chrome.runtime.onMessage.addListener((m) => {
     }
   }
   return false;
+}
+
+chrome.runtime.onMessage.addListener((m) => {
+  jobsReady.then(() => handleRuntimeMessage(m));
+  return false;
 });
 
 chrome.downloads.onChanged.addListener(async (delta) => {
   const state = delta.state && delta.state.current;
   if (state !== "complete" && state !== "interrupted") return;
+  await jobsReady;
   const [item] = await chrome.downloads.search({ id: delta.id });
   const match = item && item.filename && FILE_RE.exec(item.filename);
   if (!match) return;
@@ -182,4 +198,4 @@ chrome.downloads.onChanged.addListener(async (delta) => {
 chrome.alarms.create("oneclick-bridge", { periodInMinutes: 0.5 });
 chrome.alarms.onAlarm.addListener((a) => a.name === "oneclick-bridge" && connect());
 
-chrome.storage.session.get("oneclickJobs").then((r) => { jobs = (r && r.oneclickJobs) || {}; }).catch(() => {}).finally(connect);
+jobsReady.finally(connect);
