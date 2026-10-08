@@ -18,7 +18,7 @@ Ngày 08/10/2026, Claude Code đã làm xong Tasks 3–8. Nhánh `feat/video-too
   - Vite dev từng crash vì EBUSY dưới `.superpowers/`; đã cho bỏ qua thư mục này.
 - **Task 8**: README cập nhật theo hành vi đã kiểm chứng (Tạm dừng, âm gốc/nhạc, khôi phục, ffprobe). Bộ cài mới:
   `src-tauri/target/release/bundle/nsis/1Click Video Tool_0.1.0_x64-setup.exe`,
-  **3,131,120 bytes**, SHA256 `BE24D97D5BDC3CC05883D62193CA7E3DC893EBA7878287874998311EBE437A38`, build lại sau các sửa Minor (code = `72012d8`).
+  **3,127,808 bytes**, SHA256 `EDAA8FDC74220EED8190DAE464E2880349EFC7804306F93EB1F3FFFAC38E7136`, build lại sau các sửa Minor và đổi tên nút (code = `f0ecd8c`).
 - **Sau Task 8** đã sửa 4 Minor, mỗi lỗi có test RED → GREEN:
   - `f16687b`: bóng chữ khi viền 0;
   - `9da6943`: "Dán nhiều prompt" điền từ dòng đang chọn;
@@ -32,7 +32,9 @@ Kiểm chứng cuối (đều exit 0):
 - `npm run test:ext`: 11/11.
 - `cargo tauri build`.
 
-Còn để người dùng quyết định: "Tạm dừng" thật (để video đã gửi chạy xong) và mẫu tên đầu ra tùy chỉnh. Xem `docs/reviews/2026-10-08-fix-verification.md`.
+Người dùng đã quyết định (09/10/2026):
+- Nút "Tạm dừng" đổi tên thành **Dừng** (`f0ecd8c`), vẫn hủy job như cũ; không làm tạm dừng mềm.
+- Tên đầu ra giữ cố định `{stt:03}_{tên ảnh}.mp4`.
 
 Các mục bên dưới là lịch sử của những checkpoint trước, không phải trạng thái hiện tại.
 

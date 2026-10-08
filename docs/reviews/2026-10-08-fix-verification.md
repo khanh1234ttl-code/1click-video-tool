@@ -39,7 +39,6 @@ Không còn Important mở. Hai Minor của review đã sửa thêm ở Task 5 (
 | TOFU: hai handshake đầu đồng thời cùng được chấp nhận | `169939c` | `concurrent_first_handshakes_trust_only_one_extension` |
 | Dự án bị di chuyển chỉ rebase `image_dir` | `72012d8` | `moved_project_rebases_paths_inside_the_old_folder`, `moved_project_rebases_mixed_separator_paths` |
 
-## Còn để người dùng quyết định
-- Spec có nút **Tạm dừng** và **Dừng** riêng. Bản này chỉ có một nút "Tạm dừng", hành vi là hủy job (giống Dừng).
-  Một "Tạm dừng" thật (để các video đã gửi chạy xong) cần bridge hủy từng item trong extension. Chưa làm.
-- Tên đầu ra cố định `{stt:03}_{tên ảnh}.mp4`, đúng mẫu mặc định của spec; chưa có ô sửa mẫu tên.
+## Quyết định của người dùng (09/10/2026)
+- Nút "Tạm dừng" đổi tên thành **Dừng** (`f0ecd8c`), giữ hành vi hủy job; không làm tạm dừng mềm.
+- Tên đầu ra giữ cố định `{stt:03}_{tên ảnh}.mp4`, là mẫu mặc định của spec.
