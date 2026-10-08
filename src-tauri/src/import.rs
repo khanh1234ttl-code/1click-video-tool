@@ -101,7 +101,6 @@ pub fn apply_table(rows: &mut [Row], recs: &[TableRecord], music_dir: Option<&Pa
         let key = rec.image.trim().to_lowercase();
         let exact = rows.iter().position(|r| r.image_name().to_lowercase() == key);
         let matched = exact.or_else(|| {
-            if Path::new(&key).extension().is_some() { return None; }
             let mut matches = rows.iter().enumerate().filter(|(_, r)| r.image_stem().to_lowercase() == key);
             let first = matches.next()?.0;
             matches.next().is_none().then_some(first)
@@ -145,6 +144,31 @@ mod tests {
         let records = vec![TableRecord { image: "a".into(), prompt: Some("ambiguous".into()), ..Default::default() }];
         assert_eq!(apply_table(&mut rows, &records, None), vec!["a"]);
         assert_eq!(rows[1].prompt, "PNG");
+    }
+
+    #[test]
+    fn review_unique_dotted_stem_matches_without_image_extension() {
+        let mut rows = rows_from_images(vec!["a.v1.png".into()]);
+        let rec = TableRecord { image: " A.V1 ".into(), prompt: Some("dotted stem".into()), ..Default::default() };
+        assert!(apply_table(&mut rows, &[rec], None).is_empty());
+        assert_eq!(rows[0].prompt, "dotted stem");
+    }
+
+    #[test]
+    fn review_exact_filename_wins_over_another_images_dotted_stem() {
+        let mut rows = rows_from_images(vec!["a.png.jpg".into(), "a.png".into()]);
+        let rec = TableRecord { image: "A.PNG".into(), prompt: Some("exact".into()), ..Default::default() };
+        assert!(apply_table(&mut rows, &[rec], None).is_empty());
+        assert_eq!(rows[0].prompt, "");
+        assert_eq!(rows[1].prompt, "exact");
+    }
+
+    #[test]
+    fn review_ambiguous_dotted_stem_does_not_mutate_either_row() {
+        let mut rows = rows_from_images(vec!["a.v1.jpg".into(), "a.v1.png".into()]);
+        let rec = TableRecord { image: "A.V1".into(), prompt: Some("ambiguous".into()), ..Default::default() };
+        assert_eq!(apply_table(&mut rows, &[rec], None), vec!["A.V1"]);
+        assert!(rows.iter().all(|r| r.prompt.is_empty()));
     }
 
     #[test]

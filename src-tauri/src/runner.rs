@@ -349,6 +349,120 @@ mod tests {
     }
 
     #[test]
+    fn review_reprocess_adds_music_to_previously_silent_row() {
+        let tmp = tempfile::tempdir().unwrap();
+        let track = tmp.path().join("nhạc mới.mp3");
+        std::fs::write(&track, b"music").unwrap();
+        let mut r = runner(1);
+        r.start(&[], &mut StdRng::seed_from_u64(7)).unwrap();
+        assert_eq!(r.project.rows[0].resolved_music, None);
+        r.on_raw_ready(1, Ok("raw.mp4".into()));
+        r.on_postprocess_done(1, Ok("output.mp4".into()));
+        r.project.preset.music.folder = Some(tmp.path().into());
+        r.project.preset.music.mode = crate::model::MusicMode::Sequential;
+        let fx = r.reprocess(&[1]);
+        assert_eq!(r.project.rows[0].resolved_music, Some(track));
+        assert!(fx.contains(&Effect::PostProcess(1)));
+        assert!(!fx.iter().any(|f| matches!(f, Effect::Submit { .. })));
+    }
+
+    #[test]
+    fn review_reprocess_deleted_assignment_uses_fallback_then_silence() {
+        let tmp = tempfile::tempdir().unwrap();
+        let deleted = tmp.path().join("assigned.mp3");
+        let fallback = tmp.path().join("fallback.mp3");
+        std::fs::write(&deleted, b"assigned").unwrap();
+        std::fs::write(&fallback, b"fallback").unwrap();
+        let mut r = runner(1);
+        r.project.preset.music.mode = crate::model::MusicMode::Assigned;
+        r.project.preset.music.fallback = crate::model::MusicMode::Sequential;
+        r.project.preset.music.folder = Some(tmp.path().into());
+        r.project.rows[0].music = Some(deleted.clone());
+        r.start(&[fallback.clone()], &mut StdRng::seed_from_u64(7)).unwrap();
+        assert_eq!(r.project.rows[0].resolved_music, Some(deleted.clone()));
+        r.on_raw_ready(1, Ok("raw.mp4".into()));
+        r.on_postprocess_done(1, Ok("output.mp4".into()));
+        std::fs::remove_file(deleted).unwrap();
+        let fx = r.reprocess(&[1]);
+        assert_eq!(r.project.rows[0].resolved_music, Some(fallback.clone()));
+        assert!(fx.contains(&Effect::PostProcess(1)));
+        assert!(!fx.iter().any(|f| matches!(f, Effect::Submit { .. })));
+        std::fs::remove_file(fallback).unwrap();
+        let fx = r.reprocess(&[1]);
+        assert_eq!(r.project.rows[0].resolved_music, None);
+        assert!(fx.contains(&Effect::PostProcess(1)));
+        assert!(!fx.iter().any(|f| matches!(f, Effect::Submit { .. })));
+    }
+
+    #[test]
+    fn review_recovered_rendering_can_pause_without_resubmitting() {
+        let (mut r, job) = started(2);
+        r.on_message(FromExt::ItemProgress { job_id: job.clone(), index: 2, percent: 42 });
+        let mut recovered = Runner::new(r.project);
+        let fx = recovered.recover_after_load();
+        assert!(recovered.running);
+        assert!(!fx.iter().any(|f| matches!(f, Effect::Submit { .. })));
+        assert_eq!(recovered.on_connected(), vec![Effect::Send(ToExt::JobQuery { job_id: job.clone() })]);
+        let fx = recovered.pause();
+        assert!(!recovered.running);
+        assert!(fx.contains(&Effect::Send(ToExt::JobCancel { job_id: job.clone() })));
+        assert!(recovered.project.rows.iter().all(|r| r.status == RowStatus::Pending && r.job_id.is_none()));
+        assert!(recovered.on_message(FromExt::ItemFailed { job_id: job, index: 1, error: "late".into() }).is_empty());
+    }
+
+    #[test]
+    fn review_recovered_query_three_failures_cancel_remaining_row() {
+        let (mut r, job) = started(4);
+        r.on_message(FromExt::ItemProgress { job_id: job.clone(), index: 4, percent: 50 });
+        let mut recovered = Runner::new(r.project);
+        recovered.recover_after_load();
+        let fx = recovered.on_message(FromExt::JobStatus {
+            job_id: job.clone(), known: true, done: vec![], pending: vec![4],
+            failed: (1..=3).map(|index| crate::bridge::FailedItem { index, error: "Veo lỗi".into() }).collect(),
+        });
+        assert!(fx.contains(&Effect::Send(ToExt::JobCancel { job_id: job })));
+        assert!(!recovered.running);
+        assert_eq!(status(&recovered, 4), RowStatus::Pending);
+        assert!(recovered.project.rows[..3].iter().all(|r| matches!(r.status, RowStatus::Failed { stage: Stage::Generate, .. })));
+    }
+
+    #[test]
+    fn review_recovery_keeps_saved_music_and_finishes_running() {
+        let tmp = tempfile::tempdir().unwrap();
+        let raw = tmp.path().join("raw.mp4");
+        let saved = tmp.path().join("saved.mp3");
+        let current = tmp.path().join("current.mp3");
+        for path in [&raw, &saved, &current] { std::fs::write(path, b"x").unwrap(); }
+        let mut r = runner(1);
+        r.project.preset.music.mode = crate::model::MusicMode::Assigned;
+        r.project.rows[0].music = Some(saved.clone());
+        r.start(&[], &mut StdRng::seed_from_u64(7)).unwrap();
+        r.on_raw_ready(1, Ok(raw));
+        r.on_postprocess_started(1);
+        r.project.rows[0].music = Some(current);
+        let mut recovered = Runner::new(r.project);
+        assert!(recovered.recover_after_load().contains(&Effect::PostProcess(1)));
+        assert!(recovered.running);
+        assert_eq!(recovered.project.rows[0].resolved_music, Some(saved.clone()));
+        recovered.on_postprocess_started(1);
+        recovered.on_postprocess_done(1, Ok("output.mp4".into()));
+        assert!(!recovered.running);
+        assert_eq!(status(&recovered, 1), RowStatus::Done);
+        assert_eq!(recovered.project.rows[0].resolved_music, Some(saved));
+    }
+
+    #[test]
+    fn review_last_postprocess_failure_stops_running() {
+        let (mut r, _) = started(1);
+        r.on_raw_ready(1, Ok("raw.mp4".into()));
+        r.on_postprocess_started(1);
+        assert!(r.running);
+        r.on_postprocess_done(1, Err("FFmpeg lỗi".into()));
+        assert!(!r.running);
+        assert_eq!(status(&r, 1), RowStatus::Failed { stage: Stage::PostProcess, message: "FFmpeg lỗi".into() });
+    }
+
+    #[test]
     fn start_refuses_rows_without_prompt() {
         let mut r = runner(3);
         r.project.rows[1].prompt.clear();
