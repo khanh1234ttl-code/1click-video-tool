@@ -60,10 +60,12 @@ export function drawOverlay(ctx: CanvasRenderingContext2D, style: TextStyle, fam
       ctx.strokeStyle = style.strokeColor;
       ctx.lineWidth = style.strokeWidth * 2 * scale;
       ctx.strokeText(line, x, y);
+      // The stroke already cast the shadow; a second one under the fill would darken it twice.
+      ctx.shadowColor = "transparent";
     }
-    ctx.shadowColor = "transparent";
     ctx.fillStyle = style.color;
     ctx.fillText(line, x, y);
+    ctx.shadowColor = "transparent";
   });
   return b;
 }
