@@ -1,6 +1,7 @@
 //! Pure batch state machine: inputs are user actions and extension messages, outputs are Effects
 //! that the engine executes (send, copy, ffmpeg, save, notify).
 use crate::bridge::{FromExt, ToExt};
+use crate::model::GenMode;
 use crate::model::{Project, Row, RowStatus, Stage};
 use crate::music::pick_music;
 use rand::Rng;
@@ -66,6 +67,15 @@ impl Runner {
         let missing: Vec<String> = self.project.rows.iter().filter(|r| stts.contains(&r.stt) && self.project.effective_prompt(r).is_empty()).map(|r| r.stt.to_string()).collect();
         if !missing.is_empty() {
             return Err(format!("Các dòng chưa có prompt: {}", missing.join(", ")));
+        }
+        // Frame mode animates one first frame; reference mode takes 1–10 images (extension limit).
+        let (range, rule) = match self.project.preset.gen.mode {
+            GenMode::ImageToVideo => (1..=1, "Chế độ khung đầu cần đúng 1 ảnh mỗi dòng"),
+            GenMode::ComponentsToVideo => (1..=10, "Chế độ ảnh tham chiếu cần 1–10 ảnh mỗi dòng"),
+        };
+        let wrong: Vec<String> = self.project.rows.iter().filter(|r| stts.contains(&r.stt) && !range.contains(&r.images.len())).map(|r| r.stt.to_string()).collect();
+        if !wrong.is_empty() {
+            return Err(format!("{rule}. Kiểm tra dòng {}", wrong.join(", ")));
         }
         let assigned: Vec<Option<PathBuf>> = stts.iter().map(|s| self.project.row(*s).and_then(|r| r.music.clone())).collect();
         let m = &self.project.preset.music;
@@ -661,5 +671,24 @@ mod tests {
         assert_eq!(p.rows[0].status, RowStatus::Done);
         let json = serde_json::to_value(RowStatus::Generated).unwrap();
         assert_eq!(json, serde_json::json!({"state": "generated"}));
+    }
+
+    #[test]
+    fn start_checks_image_counts_for_the_mode() {
+        let mut r = runner(3);
+        r.project.rows[1].images.clear();
+        r.project.rows[2].images.push("C:/i/x.png".into());
+        let err = r.start(&[], &mut StdRng::seed_from_u64(1)).unwrap_err();
+        assert!(err.contains("khung đầu") && err.contains("2, 3"), "{err}");
+        assert!(r.project.rows.iter().all(|x| x.status == RowStatus::Pending), "nothing is sent");
+
+        r.project.preset.gen.mode = crate::model::GenMode::ComponentsToVideo;
+        r.project.rows[0].images = (0..11).map(|i| format!("C:/i/{i}.png").into()).collect();
+        let err = r.start(&[], &mut StdRng::seed_from_u64(1)).unwrap_err();
+        assert!(err.contains("tham chiếu") && err.contains("1, 2"), "{err}");
+
+        r.project.rows[0].images.truncate(10);
+        r.project.rows[1].images = vec!["C:/i/a.png".into(), "C:/i/b.png".into()];
+        assert!(r.start(&[], &mut StdRng::seed_from_u64(1)).is_ok(), "1–10 reference images are fine");
     }
 }

@@ -93,15 +93,50 @@ pub fn assign_music_in_order(engine: Eng, stts: Vec<u32>, image_dir: String) -> 
     res
 }
 
+/// The images in the project folder (the library prompts pick from), in natural order.
+fn library(engine: &Eng) -> Result<Vec<PathBuf>, String> {
+    let dir = engine.project().ok_or("Chưa mở dự án")?.image_dir;
+    import::scan_files(&dir, &import::IMAGE_EXTS).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn import_table(engine: Eng, path: String) -> Result<Vec<String>, String> {
     let recs = import::parse_table(Path::new(&path)).map_err(|e| e.to_string())?;
+    let library = library(&engine)?;
     let mut unmatched = vec![];
     engine.edit(|p| {
         let music_dir = p.preset.music.folder.clone();
-        unmatched = import::apply_table(&mut p.rows, &recs, music_dir.as_deref());
+        unmatched = import::apply_table(&mut p.rows, &recs, music_dir.as_deref(), &library);
     })?;
     Ok(unmatched)
+}
+
+#[tauri::command]
+pub fn list_images(engine: Eng) -> Result<Vec<String>, String> {
+    Ok(library(&engine)?.iter().map(|p| p.to_string_lossy().into_owned()).collect())
+}
+
+#[tauri::command]
+pub fn add_rows(engine: Eng, count: usize, image_dir: String) -> Result<Vec<u32>, String> {
+    let mut added = vec![];
+    engine.edit_scoped(Path::new(&image_dir), |p| added = import::add_rows(&mut p.rows, count))?;
+    Ok(added)
+}
+
+/// Returns the STTs kept because they are still being generated or post-processed.
+#[tauri::command]
+pub fn delete_rows(engine: Eng, stts: Vec<u32>, image_dir: String) -> Result<Vec<u32>, String> {
+    let mut kept = vec![];
+    engine.edit_scoped(Path::new(&image_dir), |p| kept = import::delete_rows(&mut p.rows, &stts))?;
+    Ok(kept)
+}
+
+#[tauri::command]
+pub fn assign_images(engine: Eng, images: Vec<String>, rule: import::AssignRule, stts: Vec<u32>, image_dir: String) -> Result<usize, String> {
+    let images: Vec<PathBuf> = images.into_iter().map(PathBuf::from).collect();
+    let mut n = 0;
+    engine.edit_scoped(Path::new(&image_dir), |p| n = import::assign_images(&mut p.rows, &images, rule, &stts))?;
+    Ok(n)
 }
 
 #[tauri::command]
