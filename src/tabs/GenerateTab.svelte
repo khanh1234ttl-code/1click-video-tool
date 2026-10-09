@@ -7,6 +7,7 @@
   import { statusLabel } from "../lib/textLayout";
   import type { Project, Row, Status } from "../lib/types";
   import GenSettingsBar from "../components/GenSettingsBar.svelte";
+  import ImagePicker, { type AssignRule } from "../components/ImagePicker.svelte";
 
   let { project, store, status, toast, beforeNavigate = async () => {}, onBusyChange = () => {} }: {
     project: Project | null; store: PresetStore | null; status: Status; toast: (t: string) => void;
@@ -21,10 +22,14 @@
   let pasteText = $state("");
   let pasteFrom = $state(1);
   let showPaste = $state(false);
+  let ticked = $state(new Set<number>());
+  // Image picker: target = one row's STT, or null for the bulk rules.
+  let picker: { target: number | null; chosen: string[] } | null = $state(null);
+  let library: string[] = $state([]);
   $effect(() => onBusyChange(opening || busy || stopping));
   $effect(() => { common = project?.commonPrompt ?? ""; });
   let shownProject: string | undefined;
-  $effect(() => { const dir = project?.imageDir; if (dir !== shownProject) { shownProject = dir; selected = 0; } });
+  $effect(() => { const dir = project?.imageDir; if (dir !== shownProject) { shownProject = dir; selected = 0; ticked = new Set(); picker = null; } });
   const failed = $derived(project?.rows.filter((r) => r.status.state === "failed").map((r) => r.stt) ?? []);
   const generated = $derived(project?.rows.filter((r) => r.rawVideo).length ?? 0);
   const waiting = $derived(project?.rows.filter((r) => r.status.state === "pending").length ?? 0);
@@ -47,6 +52,32 @@
       await store?.flush();
       const unmatched = await api.importTable(f);
       toast(unmatched.length ? `Không khớp: ${unmatched.join(", ")}` : "Đã nhập bảng");
+    } catch (e) { toast(String(e)); }
+  }
+  const tickedList = () => [...ticked].sort((a, b) => a - b);
+  function tick(stt: number) { const s = new Set(ticked); s.has(stt) ? s.delete(stt) : s.add(stt); ticked = s; }
+  async function openPicker(target: number | null) {
+    try { library = await api.listImages(); } catch (e) { return toast(String(e)); }
+    picker = { target, chosen: target ? [...(project?.rows.find((r) => r.stt === target)?.images ?? [])] : [] };
+  }
+  async function assign(rule: AssignRule, stts: number[]) {
+    if (!project || !picker) return;
+    try {
+      const n = await api.assignImages($state.snapshot(picker.chosen), rule, stts, project.imageDir);
+      toast(rule === "onePerImage" ? `Đã thêm ${n} dòng` : `Đã gán ảnh cho ${n} dòng`);
+      picker = null;
+    } catch (e) { toast(String(e)); }
+  }
+  async function addRow() {
+    if (!project) return;
+    try { await api.addRows(1, project.imageDir); } catch (e) { toast(String(e)); }
+  }
+  async function deleteTicked() {
+    if (!project) return;
+    try {
+      const kept = await api.deleteRows(tickedList(), project.imageDir);
+      ticked = new Set(kept);
+      if (kept.length) toast(`Dòng ${kept.join(", ")} đang chạy nên chưa xoá`);
     } catch (e) { toast(String(e)); }
   }
   function select(row: Row) { selected = row.stt; pasteFrom = row.stt; }
@@ -101,6 +132,9 @@
   <button class="primary" onclick={pickFolder} disabled={opening || busy || stopping}>Chọn folder ảnh</button>
   <button onclick={importTable} disabled={!project}>Nhập Excel/CSV</button>
   <button onclick={togglePaste} disabled={!project}>Dán nhiều prompt</button>
+  <button onclick={() => openPicker(null)} disabled={!project}>Gán ảnh…</button>
+  <button onclick={addRow} disabled={!project}>Thêm dòng</button>
+  <button onclick={deleteTicked} disabled={!project || !ticked.size}>Xoá dòng đã tick ({ticked.size})</button>
   <input class="grow" placeholder="Prompt chung cho các dòng chưa có prompt riêng" bind:value={common} onchange={() => api.setCommonPrompt(common).catch(toast)} disabled={!project} />
 </div>
 {#if store}<GenSettingsBar bind:gen={store.preset.gen} />{/if}
@@ -112,16 +146,25 @@
   </div>
 {/if}
 
+{#if picker}
+  <ImagePicker {library} bind:chosen={picker.chosen} target={picker.target} ticked={tickedList()} onassign={assign} onclose={() => (picker = null)} />
+{/if}
 {#if project}
   <div class="tablewrap">
     <table>
-      <thead><tr><th>STT</th><th>Ảnh</th><th>Tên file</th><th>Prompt</th><th>Trạng thái</th><th></th></tr></thead>
+      <thead><tr><th></th><th>STT</th><th>Ảnh</th><th>Prompt</th><th>Trạng thái</th><th></th></tr></thead>
       <tbody>
         {#each project.rows as row (`${project.imageDir}:${row.stt}`)}
           <tr class:sel={selected === row.stt} onclick={() => select(row)}>
+            <td><input type="checkbox" checked={ticked.has(row.stt)} onclick={(e) => e.stopPropagation()} onchange={() => tick(row.stt)} /></td>
             <td>{row.stt}</td>
-            <td>{#if row.images[0]}<img src={convertFileSrc(row.images[0])} alt="" loading="lazy" />{/if}</td>
-            <td class="clip">{row.images.map(name).join(", ")}</td>
+            <td>
+              <button class="imgs" title={row.images.length ? row.images.map(name).join("\n") : "Chọn ảnh cho dòng này"} onclick={(e) => { e.stopPropagation(); openPicker(row.stt); }}>
+                {#each row.images.slice(0, 3) as img (img)}<img src={convertFileSrc(img)} alt="" loading="lazy" />{/each}
+                {#if row.images.length > 3}<span class="more">+{row.images.length - 3}</span>{/if}
+                {#if !row.images.length}<span class="none">+ ảnh</span>{/if}
+              </button>
+            </td>
             <td class="prompt"><input type="text" value={row.prompt} placeholder={project.commonPrompt || "Nhập prompt"} onchange={(e) => savePrompt(row, e.currentTarget.value)} /></td>
             <td class="st {row.status.state}" title={row.status.state === "failed" ? row.status.message : ""}>
               {statusLabel(row.status)}
@@ -155,7 +198,10 @@
   th, td { padding: 4px 8px; border-bottom: 1px solid var(--line); text-align: left; }
   th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 600; z-index: 1; }
   tr.sel { background: #eaf1ff; }
-  img { width: 56px; height: 32px; object-fit: cover; border-radius: 4px; display: block; }
+  .imgs { display: flex; gap: 3px; align-items: center; padding: 2px; border: 1px dashed transparent; background: none; min-width: 60px; }
+  .imgs:hover { border-color: var(--line); }
+  .imgs img { width: 48px; height: 28px; object-fit: cover; border-radius: 4px; display: block; }
+  .more, .none { font-size: 12px; color: var(--muted); padding: 0 4px; }
   .clip { max-width: 180px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .prompt { width: 55%; } .prompt input { width: 100%; }
   .mini { padding: 2px 8px; font-size: 12px; }

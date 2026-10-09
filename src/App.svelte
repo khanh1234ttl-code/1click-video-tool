@@ -100,6 +100,7 @@
     <div class="menu">
       <p>{status.connected ? `Đã kết nối ${status.extId ?? ""}` : "Mở Chrome có cài extension 1Click"}</p>
       {#if status.extId}<button onclick={() => { api.resetExtension(); showConn = false; }}>Quên extension</button>{/if}
+      {#if status.bundledBrowser}<button onclick={() => { showConn = false; api.openVidsBrowser().catch(toast); }}>Mở trình duyệt Vids</button>{/if}
       <button onclick={() => { showConn = false; pickFfmpeg(); }}>Chọn thư mục FFmpeg</button>
     </div>
   {/if}

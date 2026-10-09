@@ -165,3 +165,16 @@ describe("Ẩn Chrome", () => {
     expect(boundary.invoke).toHaveBeenCalledWith("set_hide_chrome", { hide: false });
   });
 });
+
+describe("Trình duyệt Vids kèm theo", () => {
+  it("offers to open the bundled browser from the extension menu", async () => {
+    const original = boundary.invoke.getMockImplementation()!;
+    boundary.invoke.mockImplementation(async (type: string, args: any) => type === "get_status"
+      ? { connected: false, extId: null, extVersion: null, ffmpeg: "ffmpeg", running: false, bundledBrowser: true }
+      : original(type, args));
+    await mountApp();
+    target.querySelector<HTMLButtonElement>("button.conn")!.click(); await settle();
+    button("Mở trình duyệt Vids").click(); await settle();
+    expect(boundary.invoke.mock.calls.map((c) => c[0])).toContain("open_vids_browser");
+  });
+});

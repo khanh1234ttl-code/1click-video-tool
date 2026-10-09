@@ -176,3 +176,61 @@ describe("Dán nhiều prompt", () => {
     expect(pasteCall()).toEqual({ startStt: 1, text: "a\nb" });
   });
 });
+
+describe("Ảnh cho từng prompt", () => {
+  const assignCall = () => boundary.invoke.mock.calls.filter((c) => c[0] === "assign_images").map((c) => c[1]);
+  async function openPicker() {
+    button("Gán ảnh…").click(); await settle();
+  }
+  function pick(...paths: string[]) {
+    for (const p of paths) target.querySelector<HTMLButtonElement>(`.picker [data-image="${p}"]`)!.click();
+    flushSync();
+  }
+  beforeEach(() => {
+    const original = boundary.invoke.getMockImplementation()!;
+    boundary.invoke.mockImplementation(async (type: string, args: any) => {
+      if (type === "list_images") return ["A/1.png", "A/2.png", "A/3.png"];
+      if (type === "assign_images" || type === "add_rows") return 1;
+      if (type === "delete_rows") return [];
+      return original(type, args);
+    });
+  });
+
+  it("uses the picked images, in pick order, for every prompt", async () => {
+    await mountGen(idle); await openPicker();
+    pick("A/2.png", "A/1.png");
+    button("Cho mọi dòng").click(); await settle();
+    expect(assignCall()).toEqual([{ images: ["A/2.png", "A/1.png"], rule: "all", stts: [], imageDir: "A" }]);
+  });
+
+  it("rotates images over the ticked rows and can add one row per image", async () => {
+    await mountGen(idle);
+    target.querySelectorAll<HTMLInputElement>("tbody input[type=checkbox]")[2].click(); flushSync();
+    await openPicker(); pick("A/1.png", "A/3.png");
+    button("Xoay vòng").click(); await settle();
+    await openPicker(); pick("A/3.png");
+    button("Tạo 1 dòng cho mỗi ảnh").click(); await settle();
+    expect(assignCall()).toEqual([
+      { images: ["A/1.png", "A/3.png"], rule: "roundRobin", stts: [3], imageDir: "A" },
+      { images: ["A/3.png"], rule: "onePerImage", stts: [], imageDir: "A" },
+    ]);
+  });
+
+  it("edits one row's images from its image cell", async () => {
+    await mountGen(idle);
+    target.querySelectorAll<HTMLButtonElement>("tbody .imgs")[1].click(); await settle();
+    expect(target.querySelector(".picker [data-image='A/2.png']")?.classList.contains("on")).toBe(true);
+    pick("A/3.png");
+    button("Dùng cho dòng 2").click(); await settle();
+    expect(assignCall()).toEqual([{ images: ["A/2.png", "A/3.png"], rule: "all", stts: [2], imageDir: "A" }]);
+  });
+
+  it("adds a row and deletes the ticked rows", async () => {
+    await mountGen(idle);
+    button("Thêm dòng").click(); await settle();
+    expect(boundary.invoke).toHaveBeenCalledWith("add_rows", { count: 1, imageDir: "A" });
+    target.querySelectorAll<HTMLInputElement>("tbody input[type=checkbox]")[0].click(); flushSync();
+    button("Xoá dòng đã tick (1)").click(); await settle();
+    expect(boundary.invoke).toHaveBeenCalledWith("delete_rows", { stts: [1], imageDir: "A" });
+  });
+});
