@@ -103,7 +103,7 @@ dl.faq dd { margin: 4px 0 0; color: var(--fg); max-width: 68ch; }
     <ul>
       <li>bấm ô <b>Ảnh</b> của một dòng để chọn ảnh cho riêng dòng đó (số trên ảnh là thứ tự dùng);</li>
       <li><b class="ui">Gán ảnh…</b>: chọn nhiều ảnh rồi bấm <b class="ui">Cho mọi dòng</b> (ví dụ 2 ảnh tham chiếu cho 10 prompt), <b class="ui">Cho dòng đã tick</b>, <b class="ui">Xoay vòng</b> (mỗi dòng 1 ảnh lần lượt) hoặc <b class="ui">Tạo 1 dòng cho mỗi ảnh</b>;</li>
-      <li><b class="ui">Thêm dòng</b> và <b class="ui">Xoá dòng đã tick</b>. Số STT của các dòng còn lại giữ nguyên.</li>
+      <li><b class="ui">Thêm dòng</b> và <b class="ui">Xoá dòng đã tick</b>. Ô tick trên đầu bảng chọn tất cả. Tool hỏi lại trước khi xoá; số STT của các dòng còn lại giữ nguyên; file ảnh và video trên máy không bị xoá.</li>
     </ul>
     Chế độ <b>ảnh làm khung đầu</b> cần đúng 1 ảnh mỗi dòng; chế độ <b>ảnh tham chiếu</b> dùng 1–10 ảnh mỗi dòng. Thiếu hoặc thừa thì tool báo dòng nào cần sửa trước khi gửi.</li>
   <li>Nhập prompt bằng một trong các cách:
@@ -122,6 +122,9 @@ dl.faq dd { margin: 4px 0 0; color: var(--fg); max-width: 68ch; }
 </div>
 <p>Ô <b class="ui">Tự hậu kỳ luôn sau khi tạo</b> mặc định tắt. Tick vào nếu muốn tạo xong là chèn chữ và nhạc ngay, dùng thiết lập đang có ở bước 2.</p>
 <div class="note">Mỗi video tạo ra tốn một lượt Veo của tài khoản Google. Khi thử cấu hình mới, nên chạy vài ảnh trước.</div>
+
+<h3>Chọn lại folder đã làm</h3>
+<p>Tool hỏi <b class="ui">Mở tiếp</b> (giữ prompt, text, video cũ) hay <b class="ui">Làm mới</b> (mỗi ảnh thành một dòng trống như lần đầu, thiết lập chữ và nhạc giữ nguyên). Làm mới không xoá gì: dự án cũ và video gốc được cất vào <code>_1click\cu-&lt;số&gt;</code>.</p>
 
 <h2 id="buoc-2">Bước 2 · Hậu kỳ (không tốn lượt Veo)</h2>
 <figure>
@@ -156,6 +159,7 @@ dl.faq dd { margin: 4px 0 0; color: var(--fg); max-width: 68ch; }
     <tr><td><b class="ui">Text theo mẫu</b></td><td><code>{stt}</code> thay bằng số thứ tự, <code>{ten}</code> thay bằng tên ảnh không đuôi. Áp dụng cho các dòng đã tick, không tick dòng nào thì áp dụng cho tất cả.</td><td><code>Tập {stt}</code> ra "Tập 1", "Tập 2"…</td></tr>
     <tr><td><b class="ui">Gán nhạc lần lượt</b></td><td>Lấy file trong folder nhạc theo thứ tự tên, gán cho video 1, 2, 3…, hết bài thì quay lại bài đầu. Cột Nhạc hiện ngay để bạn sửa tay nếu cần.</td><td>3 bài, 5 video: 1, 2, 3, 1, 2.</td></tr>
     <tr><td><b class="ui">Nhập Excel/CSV</b></td><td>Điền prompt, text, nhạc từ một bảng. Có ở cả hai bước.</td><td>Xem phần file mẫu ngay dưới.</td></tr>
+    <tr><td><b class="ui">Xoá cảnh đã tick</b></td><td>Bỏ các cảnh không cần khỏi dự án, để <b class="ui">Xuất tất cả</b> không xuất chúng. Ô <b class="ui">Tất cả</b> chọn hết. File video gốc vẫn còn trong <code>_1click\raw</code>.</td><td>Tạo 10 cảnh, chỉ ưng 7: tick 3 cảnh hỏng rồi xoá.</td></tr>
   </tbody>
 </table></div>
 
@@ -231,7 +235,7 @@ dl.faq dd { margin: 4px 0 0; color: var(--fg); max-width: 68ch; }
 <h2 id="hoi-dap">Hỏi đáp nhanh</h2>
 <dl class="faq">
   <dt>Tắt tool giữa chừng thì sao?</dt>
-  <dd>Mở lại tool và chọn đúng folder ảnh. Dòng đang render được hỏi lại extension, không gửi lại; dòng Đã tạo giữ nguyên. Dữ liệu dự án nằm trong <code>&lt;folder ảnh&gt;\_1click</code>.</dd>
+  <dd>Mở lại tool, chọn đúng folder ảnh rồi bấm <b class="ui">Mở tiếp</b>. Dòng đang render được hỏi lại extension, không gửi lại; dòng Đã tạo giữ nguyên. Dữ liệu dự án nằm trong <code>&lt;folder ảnh&gt;\_1click</code>.</dd>
   <dt>Chuyển folder ảnh sang ổ khác được không?</dt>
   <dd>Được. Chuyển cả folder (kể cả <code>_1click</code> và <code>Output</code>) rồi mở lại trong tool, đường dẫn bên trong tự cập nhật.</dd>
   <dt>Video Veo khác ảnh gốc một chút?</dt>

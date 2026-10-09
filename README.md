@@ -25,7 +25,7 @@ Tool có hai bước, chuyển bằng hai nút trên đầu cửa sổ. Ô **Pre
 - **Mỗi dòng là một prompt** và có thể dùng 0–10 ảnh:
   - bấm ô **Ảnh** của một dòng để chọn ảnh cho riêng dòng đó (bấm theo thứ tự muốn dùng);
   - **Gán ảnh…** chọn nhiều ảnh rồi: **Cho mọi dòng** (ví dụ 2 ảnh tham chiếu cho 10 prompt), **Cho dòng đã tick**, **Xoay vòng** (mỗi dòng 1 ảnh lần lượt), **Tạo 1 dòng cho mỗi ảnh**;
-  - **Thêm dòng**, **Xoá dòng đã tick** (dòng đang chạy không bị xoá; số STT giữ nguyên).
+  - **Thêm dòng**, **Xoá dòng đã tick** (ô tick trên đầu bảng chọn tất cả; tool hỏi lại trước khi xoá; dòng đang chạy không bị xoá; số STT giữ nguyên; file ảnh và video trên máy không bị xoá).
 - Chế độ **ảnh làm khung đầu** cần đúng 1 ảnh mỗi dòng; chế độ **ảnh tham chiếu** dùng 1–10 ảnh mỗi dòng. Sai thì **Bắt đầu tạo** báo dòng nào cần sửa trước khi gửi.
 - Nhập prompt bằng một trong các cách:
   - sửa thẳng trong bảng;
@@ -58,6 +58,7 @@ Tool có hai bước, chuyển bằng hai nút trên đầu cửa sổ. Ô **Pre
   - **Text theo mẫu**: `{stt}` thay bằng số thứ tự, `{ten}` bằng tên ảnh. Ví dụ `Tập {stt}` ra "Tập 1", "Tập 2"… Áp dụng cho các dòng đã tick, hoặc mọi dòng nếu không tick dòng nào.
   - **Gán nhạc lần lượt**: lấy file trong folder nhạc theo thứ tự tên, gán cho video 1, 2, 3…, hết bài thì quay vòng. Cột Nhạc hiện ngay bài được gán và sửa tay được.
   - **Nhập Excel/CSV**.
+  - **Xoá cảnh đã tick**: bỏ các cảnh không cần khỏi dự án để **Xuất tất cả** không xuất chúng (ô **Tất cả** chọn hết; file video gốc vẫn còn trong `_1click\raw`).
 - **Xuất dòng chọn** / **Xuất tất cả** chèn text + nhạc vào video gốc và ghi ra Output. Xuất lại bao nhiêu lần cũng được.
 
 ### Excel/CSV
@@ -74,7 +75,10 @@ Các cột `anh, prompt, text, nhac` (không cần đủ):
   - **Âm gốc** chỉnh tiếng Veo (0% = tắt hẳn, kể cả khi không có nhạc).
 - Mặc định, thành phẩm nằm trong `<folder ảnh>\Output\`, tên `001_<tên ảnh>.mp4`, `002_<tên ảnh>.mp4`…
 - Dữ liệu dự án và video gốc nằm trong `<folder ảnh>\_1click\`.
-- Tắt tool rồi mở lại cùng folder ảnh để tiếp tục:
+- Chọn lại một folder đã làm trước đó, tool hỏi:
+  - **Mở tiếp**: làm tiếp với prompt, text và video cũ;
+  - **Làm mới**: mỗi ảnh thành một dòng trống như lần đầu, thiết lập chữ/nhạc giữ nguyên; dự án cũ và video gốc được cất vào `_1click\cu-<số>\`, không bị xoá.
+- Tắt tool rồi mở lại cùng folder ảnh, chọn **Mở tiếp** để tiếp tục:
   - dòng đang render được hỏi lại extension, không gửi lại và không tốn thêm lượt Veo;
   - dòng Đã tạo giữ nguyên.
 - Có thể chuyển hoặc đổi tên cả folder ảnh: đường dẫn bên trong tự cập nhật.
