@@ -1,4 +1,5 @@
 pub mod bridge;
+pub mod chrome_window;
 pub mod commands;
 pub mod engine;
 pub mod import;
@@ -52,9 +53,17 @@ pub fn run() {
             commands::paste_prompts, commands::paste_texts, commands::apply_text_template, commands::assign_music_in_order, commands::import_table, commands::set_preset, commands::list_presets,
             commands::save_preset, commands::load_preset, commands::save_overlays, commands::start_run,
             commands::pause_run, commands::retry_rows, commands::reprocess_rows, commands::get_status,
-            commands::set_ffmpeg_dir, commands::reset_extension, commands::list_fonts, commands::read_file_base64,
+            commands::set_ffmpeg_dir, commands::reset_extension, commands::set_hide_chrome, commands::list_fonts, commands::read_file_base64,
             commands::list_music, commands::open_path
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running 1Click Video Tool");
+        .build(tauri::generate_context!())
+        .expect("error while running 1Click Video Tool")
+        .run(|app, event| {
+            // A hidden Vids window must not outlive the tool unseen.
+            if let tauri::RunEvent::Exit = event {
+                if let Some(engine) = app.try_state::<Arc<Engine>>() {
+                    engine.restore_chrome();
+                }
+            }
+        });
 }

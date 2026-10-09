@@ -142,7 +142,7 @@ impl Runner {
                 }
                 fx
             }
-            FromExt::Hello { .. } | FromExt::JobAccepted { .. } | FromExt::Pong => vec![],
+            FromExt::Hello { .. } | FromExt::JobAccepted { .. } | FromExt::Pong | FromExt::WindowInfo { .. } => vec![],
         }
     }
 

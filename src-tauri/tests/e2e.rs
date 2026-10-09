@@ -115,6 +115,7 @@ async fn batch_runs_end_to_end() {
                 assert!(msg["base64"].as_str().unwrap().starts_with("data:image/jpeg;base64,"));
             }
             "job.submit" => break (msg["jobId"].as_str().unwrap().to_string(), msg["items"].as_array().unwrap().clone()),
+            "window.query" => {} // asked on connect; this fake runs no Chrome window
             other => panic!("unexpected {other}"),
         }
     };

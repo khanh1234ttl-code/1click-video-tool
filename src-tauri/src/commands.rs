@@ -181,6 +181,11 @@ pub fn reset_extension(engine: Eng) {
     engine.reset_extension()
 }
 
+#[tauri::command]
+pub fn set_hide_chrome(engine: Eng, hide: bool) -> Result<(), String> {
+    engine.set_hide_chrome(hide)
+}
+
 pub fn fonts_in(dir: &Path) -> Vec<FontInfo> {
     import::scan_files(dir, &["ttf", "otf"]).unwrap_or_default().into_iter().map(|p| FontInfo { name: p.file_stem().unwrap_or_default().to_string_lossy().into_owned(), path: p.to_string_lossy().into_owned() }).collect()
 }

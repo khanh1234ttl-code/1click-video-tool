@@ -934,3 +934,21 @@ async fn generated_rows_are_claimed_for_export() {
     assert_eq!(e.project().unwrap().rows[0].status, RowStatus::Done);
     assert!(dir.join("Output/001_a.mp4").exists());
 }
+
+#[tokio::test]
+async fn window_info_is_remembered_and_hide_setting_persists() {
+    let (_tmp, e, _) = fixture().await;
+    assert!(!e.status().chrome_window);
+    e.clone().on_bridge_event(BridgeEvent::Message(FromExt::WindowInfo { window_id: 5, left: 1, top: 2, width: 300, height: 200 })).await;
+    let st = e.status();
+    assert!(st.chrome_window && !st.hide_chrome);
+    assert_eq!(e.state.lock().unwrap().chrome_visible_requested, Some(true), "setting off: the window is shown");
+    e.set_hide_chrome(true).unwrap();
+    assert!(e.status().hide_chrome);
+    assert_eq!(e.state.lock().unwrap().chrome_visible_requested, Some(false));
+    assert!(project::load_settings(&e.app_dir()).hide_chrome, "persisted for the next launch");
+    e.clone().on_bridge_event(BridgeEvent::Message(FromExt::JobRejected { job_id: "x".into(), error: "Cần đăng nhập Google".into() })).await;
+    assert_eq!(e.state.lock().unwrap().chrome_visible_requested, Some(true), "a rejected job shows the window");
+    e.restore_chrome();
+    assert_eq!(e.state.lock().unwrap().chrome_visible_requested, Some(true));
+}

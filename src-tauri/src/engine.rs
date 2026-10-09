@@ -1,6 +1,7 @@
 //! Executes runner Effects: talks to the bridge, copies/probes downloads, runs ffmpeg (max 2),
 //! saves the project and notifies the UI.
 use crate::bridge::{Bridge, BridgeEvent, FromExt, JobItem, JobSettings, ToExt};
+use crate::chrome_window::Bounds;
 use crate::import::{rows_from_images, scan_files, IMAGE_EXTS};
 use crate::media::{self, MixParams};
 use crate::model::{Project, RowStatus};
@@ -21,6 +22,9 @@ pub struct Status {
     pub ext_version: Option<String>,
     pub ffmpeg: Option<String>,
     pub running: bool,
+    pub hide_chrome: bool,
+    /// The Vids window has been reported by the extension (so it can be hidden).
+    pub chrome_window: bool,
 }
 
 #[cfg(test)]
@@ -49,6 +53,9 @@ struct State {
     epoch: u64,
     next_operation: u64,
     operations: BTreeMap<u32, u64>,
+    chrome_bounds: Option<Bounds>,
+    /// Last visibility asked of the Vids window (also what tests observe).
+    chrome_visible_requested: Option<bool>,
 }
 
 type Effects = (u64, Vec<OwnedEffect>);
@@ -90,7 +97,7 @@ pub struct Engine {
 impl Engine {
     pub fn new(bridge: Bridge, app_dir: PathBuf, notify: Arc<dyn Fn(EngineEvent) + Send + Sync>) -> Arc<Engine> {
         let settings = project::load_settings(&app_dir);
-        Arc::new(Engine { state: Mutex::new(State { runner: None, settings, ext_version: None, epoch: 0, next_operation: 0, operations: BTreeMap::new() }), bridge, app_dir, notify, ffmpeg_slots: Semaphore::new(2), #[cfg(test)] test_hooks: Arc::new(review_tests::TestHooks::default()) })
+        Arc::new(Engine { state: Mutex::new(State { runner: None, settings, ext_version: None, epoch: 0, next_operation: 0, operations: BTreeMap::new(), chrome_bounds: None, chrome_visible_requested: None }), bridge, app_dir, notify, ffmpeg_slots: Semaphore::new(2), #[cfg(test)] test_hooks: Arc::new(review_tests::TestHooks::default()) })
     }
 
     pub fn app_dir(&self) -> PathBuf {
@@ -113,7 +120,38 @@ impl Engine {
             ext_version: st.ext_version.clone(),
             ffmpeg,
             running: st.runner.as_ref().map_or(false, |r| r.running),
+            hide_chrome: st.settings.hide_chrome,
+            chrome_window: st.chrome_bounds.is_some(),
         }
+    }
+
+    /// Shows or hides the reported Vids window. The Win32 call runs after the lock is released.
+    fn set_chrome_visible(&self, visible: bool) {
+        let bounds = {
+            let mut st = self.state.lock().unwrap();
+            st.chrome_visible_requested = Some(visible);
+            st.chrome_bounds
+        };
+        if let Some(b) = bounds {
+            crate::chrome_window::set_visible(&b, visible);
+        }
+    }
+
+    /// Saves the "hide Chrome" choice and applies it to the Vids window right away.
+    pub fn set_hide_chrome(&self, hide: bool) -> Result<(), String> {
+        {
+            let mut st = self.state.lock().unwrap();
+            st.settings.hide_chrome = hide;
+            project::save_settings(&self.app_dir, &st.settings).map_err(|e| e.to_string())?;
+        }
+        self.set_chrome_visible(!hide);
+        self.emit_status();
+        Ok(())
+    }
+
+    /// Brings the Vids window back, e.g. when the tool exits.
+    pub fn restore_chrome(&self) {
+        self.set_chrome_visible(true);
     }
 
     fn emit_status(&self) {
@@ -160,6 +198,24 @@ impl Engine {
     }
 
     async fn on_bridge_event(self: Arc<Self>, ev: BridgeEvent) {
+        match &ev {
+            BridgeEvent::Message(FromExt::WindowInfo { left, top, width, height, .. }) => {
+                let hide = {
+                    let mut st = self.state.lock().unwrap();
+                    st.chrome_bounds = Some(Bounds { left: *left, top: *top, width: *width, height: *height });
+                    st.settings.hide_chrome
+                };
+                self.set_chrome_visible(!hide);
+                self.emit_status();
+                return;
+            }
+            // The user may have to sign in or fix something in Chrome.
+            BridgeEvent::Message(FromExt::JobRejected { .. }) => self.set_chrome_visible(true),
+            BridgeEvent::Connected { .. } => {
+                self.bridge.send(&ToExt::WindowQuery);
+            }
+            _ => {}
+        }
         let fx = self.effects_for(ev);
         self.emit_status();
         self.apply(fx).await;

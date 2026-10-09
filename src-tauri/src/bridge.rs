@@ -52,6 +52,9 @@ pub enum ToExt {
     },
     #[serde(rename = "ping")]
     Ping,
+    /// Ask for the bounds of the window that runs Google Vids.
+    #[serde(rename = "window.query")]
+    WindowQuery,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -119,6 +122,16 @@ pub enum FromExt {
     },
     #[serde(rename = "pong")]
     Pong,
+    /// The window running Google Vids (its own window), in DIPs.
+    #[serde(rename = "window.info")]
+    WindowInfo {
+        #[serde(rename = "windowId")]
+        window_id: i64,
+        left: i32,
+        top: i32,
+        width: i32,
+        height: i32,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -279,6 +292,13 @@ mod tests {
         assert_eq!(serde_json::to_string(&ToExt::Ping).unwrap(), r#"{"type":"ping"}"#);
         let d: FromExt = serde_json::from_str(r#"{"type":"item.downloaded","jobId":"j1","index":3,"filePath":"E:\\AFF cám\\THÁNG 10\\1ClickBridge\\j1\\003_x_a.mp4"}"#).unwrap();
         assert_eq!(d, FromExt::ItemDownloaded { job_id: "j1".into(), index: 3, file_path: "E:\\AFF cám\\THÁNG 10\\1ClickBridge\\j1\\003_x_a.mp4".into() });
+    }
+
+    #[test]
+    fn window_messages_match_the_bridge() {
+        let m: FromExt = serde_json::from_str(r#"{"type":"window.info","windowId":50,"left":-8,"top":0,"width":1200,"height":800}"#).unwrap();
+        assert_eq!(m, FromExt::WindowInfo { window_id: 50, left: -8, top: 0, width: 1200, height: 800 });
+        assert_eq!(serde_json::to_string(&ToExt::WindowQuery).unwrap(), r#"{"type":"window.query"}"#);
     }
 
     #[test]

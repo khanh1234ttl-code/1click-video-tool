@@ -64,6 +64,8 @@ pub struct AppSettings {
     pub ffmpeg: Option<PathBuf>,
     pub ffprobe: Option<PathBuf>,
     pub allowed_extension_id: Option<String>,
+    /// Hide the Chrome window that runs Google Vids.
+    pub hide_chrome: bool,
 }
 
 pub fn load_settings(app_dir: &Path) -> AppSettings {
