@@ -153,3 +153,15 @@ describe("two-step app keeps ordered, scoped preset edits", () => {
     expect(writes.at(-1)!.type).toBe("load_preset");
   });
 });
+
+describe("Ẩn Chrome", () => {
+  it("hides the Vids window from the header and offers to show it again", async () => {
+    await mountApp();
+    button("Ẩn Chrome").click(); await settle();
+    expect(boundary.invoke).toHaveBeenCalledWith("set_hide_chrome", { hide: true });
+    boundary.listeners.get("status")!({ payload: { connected: true, extId: "fake", extVersion: "1", ffmpeg: "ffmpeg", running: false, hideChrome: true, chromeWindow: true } });
+    await settle();
+    button("Hiện Chrome").click(); await settle();
+    expect(boundary.invoke).toHaveBeenCalledWith("set_hide_chrome", { hide: false });
+  });
+});

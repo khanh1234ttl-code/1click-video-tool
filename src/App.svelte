@@ -89,6 +89,9 @@
     <input class="pname" placeholder="Tên preset" bind:value={presetName} disabled={navigating} />
     <button onclick={() => store!.save(presetName)} disabled={navigating}>Lưu</button>
   {/if}
+  {#if status.connected}
+    <button onclick={() => api.setHideChrome(!status.hideChrome).catch(toast)} title={status.hideChrome ? "Cho cửa sổ Chrome tạo video hiện lại" : "Ẩn hẳn cửa sổ Chrome tạo video (màn hình và taskbar)"}>{status.hideChrome ? "Hiện Chrome" : "Ẩn Chrome"}</button>
+  {/if}
   {#if !status.ffmpeg}<button class="warn" onclick={pickFfmpeg}>Thiếu FFmpeg — chọn thư mục</button>{/if}
   <button class="conn" class:on={status.connected} onclick={() => (showConn = !showConn)}>
     {status.connected ? `● Extension v${status.extVersion ?? "?"}` : "○ Extension chưa kết nối"}

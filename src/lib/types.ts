@@ -24,5 +24,5 @@ export interface Row {
   resolvedMusic: string | null; output: string | null;
 }
 export interface Project { version: number; imageDir: string; commonPrompt: string; preset: Preset; rows: Row[] }
-export interface Status { connected: boolean; extId: string | null; extVersion: string | null; ffmpeg: string | null; running: boolean }
+export interface Status { connected: boolean; extId: string | null; extVersion: string | null; ffmpeg: string | null; running: boolean; hideChrome?: boolean; chromeWindow?: boolean }
 export interface FontInfo { name: string; path: string }

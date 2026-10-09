@@ -23,6 +23,7 @@ export const api = {
   reprocessRows: (stts: number[]) => invoke<void>("reprocess_rows", { stts }),
   getStatus: () => invoke<Status>("get_status"),
   setFfmpegDir: (dir: string) => invoke<void>("set_ffmpeg_dir", { dir }),
+  setHideChrome: (hide: boolean) => invoke<void>("set_hide_chrome", { hide }),
   resetExtension: () => invoke<void>("reset_extension"),
   listFonts: () => invoke<FontInfo[]>("list_fonts"),
   readFileBase64: (path: string) => invoke<string>("read_file_base64", { path }),

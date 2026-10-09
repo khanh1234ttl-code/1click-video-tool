@@ -29,7 +29,8 @@ Tool có hai bước, chuyển bằng hai nút trên đầu cửa sổ. Ô **Pre
 - Bấm **Bắt đầu tạo**. Tab Google Vids có thể để ẩn.
   - Trạng thái chạy qua `Chờ → Đang gửi → Render n% → Đã tạo`.
   - Dòng **Đã tạo** đã có video gốc; bấm **Xem** để mở video đó.
-  - **Mở folder video gốc** mở `<folder ảnh>\_1clickaw`.
+  - **Mở folder video gốc** mở `<folder ảnh>\_1click
+aw`.
 - **Dừng** hủy các video đang tạo: dòng chưa xong trở về **Chờ**, chạy lại sẽ tốn lượt Veo. Dòng đã tạo không bị ảnh hưởng.
 - Dòng lỗi: bấm **Thử lại** trên dòng đó, hoặc **Thử lại N dòng lỗi**.
 - Tick **Tự hậu kỳ luôn sau khi tạo** nếu muốn tạo xong là xuất luôn, dùng thiết lập của bước 2.
@@ -80,6 +81,7 @@ Các cột `anh, prompt, text, nhac`:
 - Lỗi hậu kỳ: kiểm tra FFmpeg, text và nhạc, rồi **Xuất** lại dòng đó.
 - Veo dùng ảnh làm khung đầu nhưng có thể vẽ lại một số chi tiết; bố cục được giữ. Video Veo có dấu ✦ ở góc dưới phải.
 - File CSV phải lưu dạng **CSV UTF-8** để giữ dấu tiếng Việt; có thể dùng `.xlsx`.
+- **Ẩn Chrome**: nút trên đầu cửa sổ ẩn hẳn cửa sổ Chrome đang tạo video (khỏi màn hình và taskbar); **Hiện Chrome** để xem lại. Tool tự hiện lại khi cần đăng nhập, khi job bị từ chối và khi tắt tool. Nên bật thêm **Run in background / Chạy nền** trong side panel của extension (chọn tab Google Vids khi Chrome hỏi) để Chrome không tạm dừng trang.
 - Nếu extension chưa kết nối, kiểm tra tool đang mở và đã Reload extension sau cập nhật.
 
 ## Phát triển và đóng gói

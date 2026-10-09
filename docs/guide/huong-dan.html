@@ -69,6 +69,7 @@ dl.faq dd { margin: 4px 0 0; color: var(--fg); max-width: 68ch; }
   <a href="#buoc-2">Bước 2 · Hậu kỳ</a>
   <a href="#hang-loat">Làm hàng loạt</a>
   <a href="#excel">File Excel mẫu</a>
+  <a href="#an-chrome">Ẩn Chrome và Chạy nền</a>
   <a href="#trang-thai">Trạng thái và thử lại</a>
   <a href="#hoi-dap">Hỏi đáp nhanh</a>
 </nav>
@@ -175,6 +176,21 @@ dl.faq dd { margin: 4px 0 0; color: var(--fg); max-width: 68ch; }
   </tbody>
 </table></div>
 <div class="note">Tool chỉ đọc <b>sheet đầu tiên</b> và cần dòng tiêu đề ở dòng 1. Ô trống không bao giờ xoá dữ liệu đang có. Khi lưu CSV, chọn <b>CSV UTF-8 (Comma delimited)</b> để giữ dấu tiếng Việt. Dòng nào không khớp được, tool báo lại sau khi nhập.</div>
+
+<h2 id="an-chrome">Ẩn Chrome và Chạy nền</h2>
+<p>Tool luôn chạy Google Vids trong một cửa sổ Chrome riêng. Nếu tab Vids đang nằm chung với các tab khác của bạn, tool tách nó ra cửa sổ riêng, không tải lại trang. Các cửa sổ Chrome khác của bạn không bị đụng tới.</p>
+<ol class="steps">
+  <li>Bấm <b class="ui">Ẩn Chrome</b> trên đầu cửa sổ tool. Cửa sổ Vids biến mất khỏi màn hình và thanh taskbar, nhưng vẫn tạo video bình thường.</li>
+  <li>Bấm <b class="ui">Hiện Chrome</b> khi muốn xem lại. Tool cũng tự hiện cửa sổ khi Google bắt đăng nhập, khi job bị từ chối và khi bạn tắt tool.</li>
+  <li>Lựa chọn Ẩn/Hiện được nhớ cho lần mở tool sau.</li>
+</ol>
+<h3>Nên bật thêm "Chạy nền" của extension</h3>
+<p>Chrome có thể tạm dừng một trang không hiển thị trên màn hình. Chế độ <b>Run in background / Chạy nền</b> của extension giữ cho tab Vids luôn chạy bằng cách chia sẻ tab đó (không ghi hình, không gửi đi đâu).</p>
+<ol class="steps">
+  <li>Mở side panel của extension Vids Automation trên tab Google Vids.</li>
+  <li>Bấm <b class="ui">Run in background</b>, rồi trong hộp thoại của Chrome chọn đúng <b>tab Google Vids</b> (không chọn cửa sổ hay màn hình) và bấm Chia sẻ.</li>
+  <li>Chỉ cần làm một lần cho mỗi lần mở trang Vids. Tool không bật hộ được vì Chrome bắt bạn tự chọn tab.</li>
+</ol>
 
 <h2 id="trang-thai">Trạng thái và thử lại</h2>
 <div class="tablewrap"><table>
