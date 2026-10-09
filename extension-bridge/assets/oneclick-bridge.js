@@ -45,13 +45,39 @@ function connect() {
   ws.onerror = () => {};
 }
 
-async function ensureVidsTab() {
+// The Vids tab runs in a window of its own, so the desktop tool can hide that window without
+// touching the user's other Chrome windows. The tool finds it by these bounds (DIP).
+let trackedWindow = null;
+const windowReady = chrome.storage.session.get("oneclickWindow")
+  .then((r) => { trackedWindow = (r && r.oneclickWindow) || null; }).catch(() => {});
+
+async function reportWindow(windowId) {
+  const w = await chrome.windows.get(windowId);
+  trackedWindow = w.id;
+  chrome.storage.session.set({ oneclickWindow: w.id }).catch(() => {});
+  send({ type: "window.info", windowId: w.id, left: w.left, top: w.top, width: w.width, height: w.height });
+}
+
+async function ensureOwnWindow(tab) {
+  const siblings = await chrome.tabs.query({ windowId: tab.windowId });
+  if (siblings.length <= 1) return tab.windowId;
+  const win = await chrome.windows.create({ tabId: tab.id, focused: false });
+  return win.id;
+}
+
+async function findVidsTab() {
   const tabs = await chrome.tabs.query({ url: VIDS_MATCH });
-  let tab = tabs.find((t) => /\/videos\/d\//.test(t.url || "")) || tabs[0];
+  return tabs.find((t) => /\/videos\/d\//.test(t.url || "")) || tabs[0];
+}
+
+async function ensureVidsTab() {
+  let tab = await findVidsTab();
   if (!tab) {
     const win = await chrome.windows.create({ url: CREATE_URL, focused: false });
     tab = win.tabs[0];
+    tab.windowId = tab.windowId ?? win.id;
   }
+  await reportWindow(await ensureOwnWindow(tab)).catch(() => {});
   for (let i = 0; i < 120; i++) {
     const t = await chrome.tabs.get(tab.id);
     if ((t.url || "").includes("accounts.google.com")) throw new Error("Cần đăng nhập Google trong Chrome rồi thử lại");
@@ -71,6 +97,11 @@ async function handle(msg) {
   switch (msg.type) {
     case "ping":
       return send({ type: "pong" });
+    case "window.query": {
+      const tab = await findVidsTab();
+      if (tab) await reportWindow(tab.windowId);
+      return;
+    }
     case "image.put":
       images.set(msg.id, { base64: msg.base64, name: msg.name });
       return;
@@ -192,6 +223,10 @@ chrome.downloads.onChanged.addListener(async (delta) => {
   } else if (state === "interrupted" && setItem(jobId, index, { state: "failed", error: "Tải video bị gián đoạn" })) {
     send({ type: "item.failed", jobId, index, error: "Tải video bị gián đoạn" });
   }
+});
+
+chrome.windows.onBoundsChanged.addListener((w) => {
+  windowReady.then(() => { if (w && w.id === trackedWindow) reportWindow(w.id).catch(() => {}); });
 });
 
 // Retry every five seconds while awake; the alarm also wakes an idle service worker.

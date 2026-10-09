@@ -18,15 +18,18 @@ async function within(promise, milliseconds, message) {
   } finally { clearTimeout(timer); }
 }
 
-function mockChrome({ loginRedirect = false, reply, storedJobs, restoreGate } = {}) {
-  const listeners = { runtime: [], downloads: [], alarms: [] };
+function mockChrome({ loginRedirect = false, reply, storedJobs, restoreGate, sharedWindow = false } = {}) {
+  const listeners = { runtime: [], downloads: [], alarms: [], bounds: [] };
   const sent = [];
-  const tabs = loginRedirect ? [] : [{ id: 7, url: "https://docs.google.com/videos/d/abc/edit", status: "complete" }];
+  const created = [];
+  const tabs = loginRedirect ? [] : [{ id: 7, windowId: 1, url: "https://docs.google.com/videos/d/abc/edit", status: "complete" }];
+  if (sharedWindow) tabs.push({ id: 8, windowId: 1, url: "https://example.com/", status: "complete" });
+  const wins = { 1: { id: 1, left: 0, top: 0, width: 1600, height: 900 }, 50: { id: 50, left: 100, top: 80, width: 1200, height: 800 }, 60: { id: 60, left: 10, top: 10, width: 1280, height: 860 } };
   const store = { oneclickJobs: storedJobs };
   const chrome = {
     runtime: { getManifest: () => ({ version: "1.1.10.0" }), onMessage: { addListener: (f) => listeners.runtime.push(f) } },
     tabs: {
-      query: async () => tabs,
+      query: async (q = {}) => tabs.filter((t) => (q.windowId === undefined || t.windowId === q.windowId) && (!q.url || /docs\.google\.com\/videos\//.test(t.url))),
       get: async (id) => tabs.find((t) => t.id === id) ?? { id, url: "https://accounts.google.com/signin", status: "complete" },
       sendMessage: async (tabId, msg) => {
         sent.push({ tabId, msg: structuredClone(msg) });
@@ -34,7 +37,16 @@ function mockChrome({ loginRedirect = false, reply, storedJobs, restoreGate } = 
         return override ?? (msg.type === "CHECK_VIDS_PAGE" ? { isVidsPage: true } : { success: true });
       },
     },
-    windows: { create: async () => ({ tabs: [{ id: 99 }] }) },
+    windows: {
+      create: async (opts) => {
+        created.push(structuredClone(opts));
+        if (opts.tabId !== undefined) { const t = tabs.find((x) => x.id === opts.tabId); t.windowId = 50; return { ...wins[50], tabs: [t] }; }
+        return { ...wins[60], tabs: [{ id: 99, windowId: 60 }] };
+      },
+      get: async (id) => ({ ...wins[id] }),
+      onBoundsChanged: { addListener: (f) => listeners.bounds.push(f) },
+    },
+    __created: created, __wins: wins,
     downloads: { onChanged: { addListener: (f) => listeners.downloads.push(f) }, search: async ({ id }) => [{ id, filename: chrome.__files[id] }] },
     alarms: { create: () => {}, onAlarm: { addListener: (f) => listeners.alarms.push(f) } },
     storage: { session: { get: async (k) => { await restoreGate; return { [k]: store[k] }; }, set: async (o) => Object.assign(store, o) } },
@@ -287,4 +299,35 @@ test("download during startup restore is retained for later job.query", async (t
   const status = await next("job.status");
   assert.deepEqual(status.done, [{ index: 1, filePath }]);
   assert.deepEqual(status.pending, []);
+});
+
+test("moves a shared Vids tab into its own window and reports window.info", async (t) => {
+  const { ws, next, chrome } = await setup(t, { sharedWindow: true });
+  ws.send(JSON.stringify(submit));
+  const info = await next("window.info");
+  assert.deepEqual(chrome.__created, [{ tabId: 7, focused: false }]);
+  assert.deepEqual(info, { type: "window.info", windowId: 50, left: 100, top: 80, width: 1200, height: 800 });
+});
+
+test("keeps a Vids tab that already has its own window and reports it", async (t) => {
+  const { ws, next, chrome } = await setup(t);
+  ws.send(JSON.stringify(submit));
+  assert.deepEqual(await next("window.info"), { type: "window.info", windowId: 1, left: 0, top: 0, width: 1600, height: 900 });
+  assert.deepEqual(chrome.__created, []);
+});
+
+test("answers window.query with the Vids window bounds", async (t) => {
+  const { ws, next } = await setup(t);
+  ws.send(JSON.stringify({ type: "window.query" }));
+  assert.deepEqual(await next("window.info"), { type: "window.info", windowId: 1, left: 0, top: 0, width: 1600, height: 900 });
+});
+
+test("re-reports bounds when the Vids window moves", async (t) => {
+  const { ws, next, chrome, listeners } = await setup(t);
+  ws.send(JSON.stringify(submit));
+  await next("window.info");
+  chrome.__wins[1].left = 300;
+  for (const f of listeners.bounds) f({ id: 2 }); // another window: ignored
+  for (const f of listeners.bounds) f({ ...chrome.__wins[1] });
+  assert.equal((await next("window.info")).left, 300);
 });
