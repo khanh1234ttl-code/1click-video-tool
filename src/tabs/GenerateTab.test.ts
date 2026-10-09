@@ -13,7 +13,7 @@ vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
 // The mounted component stays real; only Canvas/font work is replaced.
 vi.mock("../lib/overlay", () => ({ ensureFont: async () => "Arial", drawOverlay: vi.fn(), renderOverlayPng: async () => null }));
 
-const row = (stt: number): Row => ({ stt, imagePath: `A/${stt}.png`, prompt: "", text: "", music: null, textOverride: null, status: { state: "pending" }, jobId: null, rawVideo: null, resolvedMusic: null, output: null });
+const row = (stt: number): Row => ({ stt, images: [`A/${stt}.png`], prompt: "", text: "", music: null, textOverride: null, status: { state: "pending" }, jobId: null, rawVideo: null, resolvedMusic: null, output: null });
 const deferred = () => {
   let resolve!: () => void;
   const promise = new Promise<void>((yes) => { resolve = yes; });

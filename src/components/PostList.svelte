@@ -60,7 +60,7 @@
     <div class="item" class:sel={selected === row.stt} onclick={() => (selected = row.stt)} role="presentation">
       <input type="checkbox" checked={picked.has(row.stt)} onclick={(e) => e.stopPropagation()} onchange={() => toggle(row.stt)} />
       <b>{row.stt}</b>
-      <img src={convertFileSrc(row.imagePath)} alt="" loading="lazy" title={name(row.imagePath)} />
+      {#if row.images[0]}<img src={convertFileSrc(row.images[0])} alt="" loading="lazy" title={row.images.map(name).join(", ")} />{:else}<span class="noimg">—</span>{/if}
       <input type="text" class="text" value={row.text} placeholder="Text trên video" onclick={(e) => e.stopPropagation()} onchange={(e) => save(row, { text: e.currentTarget.value })} />
       <select class="music" value={row.music ?? ""} onclick={(e) => e.stopPropagation()} onchange={(e) => save(row, { music: e.currentTarget.value || null })}>
         <option value="">Nhạc tự động</option>

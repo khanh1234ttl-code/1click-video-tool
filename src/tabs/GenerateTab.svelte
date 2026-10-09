@@ -120,8 +120,8 @@
         {#each project.rows as row (`${project.imageDir}:${row.stt}`)}
           <tr class:sel={selected === row.stt} onclick={() => select(row)}>
             <td>{row.stt}</td>
-            <td><img src={convertFileSrc(row.imagePath)} alt="" loading="lazy" /></td>
-            <td class="clip">{name(row.imagePath)}</td>
+            <td>{#if row.images[0]}<img src={convertFileSrc(row.images[0])} alt="" loading="lazy" />{/if}</td>
+            <td class="clip">{row.images.map(name).join(", ")}</td>
             <td class="prompt"><input type="text" value={row.prompt} placeholder={project.commonPrompt || "Nhập prompt"} onchange={(e) => savePrompt(row, e.currentTarget.value)} /></td>
             <td class="st {row.status.state}" title={row.status.state === "failed" ? row.status.message : ""}>
               {statusLabel(row.status)}

@@ -173,11 +173,12 @@ impl RowStatus {
     }
 }
 
+/// One prompt and the images it uses (0–10; frame mode uses the first as its first frame).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[serde(rename_all = "camelCase", from = "RowWire")]
 pub struct Row {
     pub stt: u32,
-    pub image_path: PathBuf,
+    pub images: Vec<PathBuf>,
     #[serde(default)]
     pub prompt: String,
     #[serde(default)]
@@ -197,15 +198,59 @@ pub struct Row {
     pub output: Option<PathBuf>,
 }
 
+/// Accepts both the current shape and projects written before rows had several images
+/// (`imagePath`).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RowWire {
+    stt: u32,
+    #[serde(default)]
+    images: Vec<PathBuf>,
+    #[serde(default)]
+    image_path: Option<PathBuf>,
+    #[serde(default)]
+    prompt: String,
+    #[serde(default)]
+    text: String,
+    #[serde(default)]
+    music: Option<PathBuf>,
+    #[serde(default)]
+    text_override: Option<TextStyle>,
+    status: RowStatus,
+    #[serde(default)]
+    job_id: Option<String>,
+    #[serde(default)]
+    raw_video: Option<PathBuf>,
+    #[serde(default)]
+    resolved_music: Option<PathBuf>,
+    #[serde(default)]
+    output: Option<PathBuf>,
+}
+
+impl From<RowWire> for Row {
+    fn from(w: RowWire) -> Self {
+        let images = if w.images.is_empty() { w.image_path.into_iter().collect() } else { w.images };
+        Row { stt: w.stt, images, prompt: w.prompt, text: w.text, music: w.music, text_override: w.text_override, status: w.status, job_id: w.job_id, raw_video: w.raw_video, resolved_music: w.resolved_music, output: w.output }
+    }
+}
+
 impl Row {
-    pub fn new(stt: u32, image_path: PathBuf) -> Self {
-        Self { stt, image_path, prompt: String::new(), text: String::new(), music: None, text_override: None, status: RowStatus::Pending, job_id: None, raw_video: None, resolved_music: None, output: None }
+    pub fn new(stt: u32, image: PathBuf) -> Self {
+        Self { images: vec![image], ..Self::empty(stt) }
+    }
+    /// A prompt row without images yet.
+    pub fn empty(stt: u32) -> Self {
+        Self { stt, images: vec![], prompt: String::new(), text: String::new(), music: None, text_override: None, status: RowStatus::Pending, job_id: None, raw_video: None, resolved_music: None, output: None }
+    }
+    pub fn first_image(&self) -> Option<&PathBuf> {
+        self.images.first()
     }
     pub fn image_name(&self) -> String {
-        self.image_path.file_name().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+        self.first_image().and_then(|p| p.file_name()).map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
     }
+    /// Names the output file: the first image's stem, or "prompt" for a row without images.
     pub fn image_stem(&self) -> String {
-        self.image_path.file_stem().map(|s| s.to_string_lossy().into_owned()).unwrap_or_default()
+        self.first_image().and_then(|p| p.file_stem()).map(|s| s.to_string_lossy().into_owned()).unwrap_or_else(|| "prompt".into())
     }
 }
 
@@ -283,5 +328,28 @@ mod tests {
         assert_eq!(p.gen.quality, "1080p");
         assert_eq!(p.gen.concurrency, 3);
         assert_eq!(p.text, TextStyle::default());
+    }
+
+    #[test]
+    fn old_rows_with_image_path_load_as_images() {
+        let r: Row = serde_json::from_str(r#"{"stt":2,"imagePath":"C:/x/a.png","status":{"state":"done"}}"#).unwrap();
+        assert_eq!(r.images, vec![PathBuf::from("C:/x/a.png")]);
+        let json = serde_json::to_value(&r).unwrap();
+        assert!(json.get("imagePath").is_none(), "only images is written back");
+        assert_eq!(json["images"][0], "C:/x/a.png");
+        let back: Row = serde_json::from_value(json).unwrap();
+        assert_eq!(back, r);
+    }
+
+    #[test]
+    fn rows_name_outputs_after_their_first_image_or_prompt() {
+        let mut r = Row::new(1, "C:/x/cảnh 1.png".into());
+        assert_eq!(r.images, vec![PathBuf::from("C:/x/cảnh 1.png")]);
+        assert_eq!(r.image_stem(), "cảnh 1");
+        r.images.push("C:/x/b.png".into());
+        assert_eq!(r.image_stem(), "cảnh 1");
+        r.images.clear();
+        assert_eq!(r.image_stem(), "prompt");
+        assert_eq!(Row::empty(7).images, Vec::<PathBuf>::new());
     }
 }

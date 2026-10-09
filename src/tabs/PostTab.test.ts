@@ -15,7 +15,7 @@ let target: HTMLDivElement, instance: ReturnType<typeof mount>, store: PresetSto
 async function settle() { for (let i = 0; i < 20; i++) { await tick(); await Promise.resolve(); } }
 const button = (label: string) => { const b = [...target.querySelectorAll("button")].find((b) => b.textContent?.trim() === label); if (!b) throw new Error(`Missing button ${label}`); return b; };
 const call = (type: string) => boundary.invoke.mock.calls.find((c) => c[0] === type)?.[1];
-const row = (stt: number, raw: boolean) => ({ stt, imagePath: `A/${stt}.png`, prompt: "", text: "", music: null, textOverride: null, status: raw ? { state: "generated" as const } : { state: "pending" as const }, jobId: null, rawVideo: raw ? `A/_1click/raw/00${stt}.mp4` : null, resolvedMusic: null, output: null });
+const row = (stt: number, raw: boolean) => ({ stt, images: [`A/${stt}.png`], prompt: "", text: "", music: null, textOverride: null, status: raw ? { state: "generated" as const } : { state: "pending" as const }, jobId: null, rawVideo: raw ? `A/_1click/raw/00${stt}.mp4` : null, resolvedMusic: null, output: null });
 
 beforeEach(async () => {
   p = fixture("A"); p.rows = [row(1, true), row(2, false), row(3, true)];

@@ -86,9 +86,9 @@
   <section class="right">
     {#if row}
       {#if own}
-        <TextPreview bind:style={rowStyle} text={row.text || "Chữ mẫu trên video"} w={res.w} h={res.h} imagePath={row.imagePath} videoPath={row.rawVideo} maxHeight="42vh" />
+        <TextPreview bind:style={rowStyle} text={row.text || "Chữ mẫu trên video"} w={res.w} h={res.h} imagePath={row.images[0] ?? null} videoPath={row.rawVideo} maxHeight="42vh" />
       {:else}
-        <TextPreview bind:style={store.preset.text} text={row.text || "Chữ mẫu trên video"} w={res.w} h={res.h} imagePath={row.imagePath} videoPath={row.rawVideo} maxHeight="42vh" />
+        <TextPreview bind:style={store.preset.text} text={row.text || "Chữ mẫu trên video"} w={res.w} h={res.h} imagePath={row.images[0] ?? null} videoPath={row.rawVideo} maxHeight="42vh" />
       {/if}
       <label class="check"><input type="checkbox" bind:checked={own} /> Kiểu/vị trí chữ riêng cho video {row.stt}</label>
     {/if}

@@ -19,7 +19,7 @@ export type RowStatus =
   | { state: "failed"; stage: Stage; message: string };
 
 export interface Row {
-  stt: number; imagePath: string; prompt: string; text: string; music: string | null;
+  stt: number; images: string[]; prompt: string; text: string; music: string | null;
   textOverride: TextStyle | null; status: RowStatus; jobId: string | null; rawVideo: string | null;
   resolvedMusic: string | null; output: string | null;
 }

@@ -16,7 +16,7 @@ vi.mock("./lib/overlay", () => ({ ensureFont: async () => "Arial", drawOverlay: 
 
 function project(dir = "A", prompt = "prompt A"): Project {
   const p = fixture(dir);
-  p.rows = [{ stt: 1, imagePath: `${dir}/1.png`, prompt, text: "", music: null, textOverride: null, status: { state: "generated" }, jobId: null, rawVideo: `${dir}/_1click/raw/001.mp4`, resolvedMusic: null, output: null }];
+  p.rows = [{ stt: 1, images: [`${dir}/1.png`], prompt, text: "", music: null, textOverride: null, status: { state: "generated" }, jobId: null, rawVideo: `${dir}/_1click/raw/001.mp4`, resolvedMusic: null, output: null }];
   return p;
 }
 const deferred = <T = void>() => {

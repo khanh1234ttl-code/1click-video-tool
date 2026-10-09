@@ -46,7 +46,9 @@ fn rebase_project(p: &mut Project, new_dir: &Path) {
         rebase(path);
     }
     for row in &mut p.rows {
-        rebase(&mut row.image_path);
+        for image in &mut row.images {
+            rebase(image);
+        }
         let font = row.text_override.as_mut().and_then(|t| t.font_file.as_mut());
         for path in [row.music.as_mut(), row.raw_video.as_mut(), row.resolved_music.as_mut(), row.output.as_mut(), font].into_iter().flatten() {
             rebase(path);
@@ -130,6 +132,7 @@ mod tests {
         let elsewhere = tmp.path().join("nhạc chung").join("song.mp3");
         std::fs::create_dir_all(&old).unwrap();
         let mut row = Row::new(1, old.join("ảnh 1.png"));
+        row.images.push(old.join("ảnh 2.png"));
         row.raw_video = Some(old.join("_1click").join("raw").join("001.mp4"));
         row.output = Some(old.join("Output").join("001_ảnh 1.mp4"));
         row.resolved_music = Some(old.join("music").join("a.mp3"));
@@ -145,7 +148,7 @@ mod tests {
         let back = load(&new).unwrap().unwrap();
         let r = &back.rows[0];
         assert_eq!(back.image_dir, new);
-        assert_eq!(r.image_path, new.join("ảnh 1.png"));
+        assert_eq!(r.images, vec![new.join("ảnh 1.png"), new.join("ảnh 2.png")]);
         assert_eq!(r.raw_video, Some(new.join("_1click").join("raw").join("001.mp4")));
         assert_eq!(r.output, Some(new.join("Output").join("001_ảnh 1.mp4")));
         assert_eq!(r.resolved_music, Some(new.join("music").join("a.mp3")));
@@ -166,7 +169,7 @@ mod tests {
         save(&p).unwrap();
         let new = tmp.path().join("b");
         std::fs::rename(&old, &new).unwrap();
-        assert_eq!(load(&new).unwrap().unwrap().rows[0].image_path, new.join("01.png"));
+        assert_eq!(load(&new).unwrap().unwrap().rows[0].images, vec![new.join("01.png")]);
     }
 
     #[test]

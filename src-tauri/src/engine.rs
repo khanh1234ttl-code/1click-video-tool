@@ -517,13 +517,16 @@ impl Engine {
         if !operations.iter().all(|op| Self::operation_matches(&self.state.lock().unwrap(), op)) { return (epoch, vec![]); }
         let Some(first) = operations.first() else { return (epoch, vec![]); };
         let project = first.project.clone();
-        let paths: Vec<_> = operations.iter().map(|op| (op.stt, op.project.row(op.stt).unwrap().image_path.clone())).collect();
+        let paths: Vec<_> = operations.iter().map(|op| (op.stt, op.project.row(op.stt).unwrap().first_image().cloned())).collect();
         #[cfg(test)]
         let hooks = self.test_hooks.clone();
         let encoded = tokio::task::spawn_blocking(move || {
             #[cfg(test)]
             hooks.checkpoint_blocking(review_tests::Boundary::Encode);
-            paths.into_iter().map(|(stt, p)| (stt, media::encode_image_for_upload(&p))).collect::<Vec<_>>()
+            paths.into_iter().map(|(stt, p)| (stt, match p {
+                Some(p) => media::encode_image_for_upload(&p),
+                None => Err(anyhow::anyhow!("Dòng {stt} chưa có ảnh")),
+            })).collect::<Vec<_>>()
         }).await;
         // The checks and all transport enqueueing share the mutation mutex with Pause/Open.
         let mut st = self.state.lock().unwrap();
