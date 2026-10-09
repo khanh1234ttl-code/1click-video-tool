@@ -5,6 +5,7 @@ pub mod control;
 pub mod commands;
 pub mod engine;
 pub mod import;
+pub mod mcp;
 pub mod media;
 pub mod model;
 pub mod music;
@@ -16,6 +17,11 @@ use std::sync::Arc;
 use tauri::{Emitter, Manager};
 
 pub const BRIDGE_ADDR: &str = "127.0.0.1:17890";
+
+/// MCP server for agents on stdin/stdout; forwards to the running app (see `mcp.rs`).
+pub fn run_mcp() {
+    tokio::runtime::Builder::new_current_thread().enable_all().build().expect("tokio runtime").block_on(mcp::run_stdio());
+}
 
 pub fn run() {
     tauri::Builder::default()
