@@ -1,0 +1,14 @@
+{
+  "bundle": {
+    "targets": ["app"],
+    "resources": {
+      "vendor/chromium/": "chromium/",
+      "vendor/ffmpeg/": "ffmpeg/",
+      "vendor/extension/": "extension/",
+      "vendor/THIRD_PARTY_NOTICES.txt": "THIRD_PARTY_NOTICES.txt"
+    },
+    "macOS": {
+      "minimumSystemVersion": "11.0"
+    }
+  }
+}
