@@ -35,8 +35,14 @@ pub struct FontInfo {
 
 /// async: opening spawns tokio tasks, and Tauri runs sync commands outside the tokio runtime.
 #[tauri::command]
-pub async fn open_project(engine: Eng<'_>, dir: String) -> Result<Project, String> {
-    engine.inner().open_project(Path::new(&dir))
+pub async fn open_project(engine: Eng<'_>, dir: String, fresh: Option<bool>) -> Result<Project, String> {
+    if fresh == Some(true) { engine.inner().open_project_fresh(Path::new(&dir)) } else { engine.inner().open_project(Path::new(&dir)) }
+}
+
+/// The folder's saved project, if any, so the UI can ask "Mở tiếp hay Làm mới?".
+#[tauri::command]
+pub fn peek_project(dir: String) -> Option<crate::engine::ProjectPeek> {
+    crate::engine::peek_project(Path::new(&dir))
 }
 
 #[tauri::command]

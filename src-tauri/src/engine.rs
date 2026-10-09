@@ -3,7 +3,7 @@
 use crate::bridge::{Bridge, BridgeEvent, FromExt, JobItem, JobSettings, ToExt};
 use crate::browser::Bundle;
 use crate::chrome_window::Bounds;
-use crate::import::{rows_from_images, scan_files, IMAGE_EXTS};
+use crate::import::{self, rows_from_images, scan_files, IMAGE_EXTS};
 use crate::media::{self, MixParams};
 use crate::model::{Project, RowStatus};
 use crate::project::{self, AppSettings};
@@ -120,6 +120,24 @@ pub struct Engine {
     next_render: std::sync::atomic::AtomicU64,
     #[cfg(test)]
     test_hooks: Arc<review_tests::TestHooks>,
+}
+
+/// What a folder's saved project holds, so the UI can ask "Mở tiếp hay Làm mới?".
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectPeek {
+    pub rows: usize,
+    pub prompts: usize,
+    pub videos: usize,
+}
+
+pub fn peek_project(image_dir: &Path) -> Option<ProjectPeek> {
+    let p = project::load(image_dir).ok().flatten()?;
+    Some(ProjectPeek {
+        rows: p.rows.len(),
+        prompts: p.rows.iter().filter(|r| !r.prompt.trim().is_empty()).count(),
+        videos: p.rows.iter().filter(|r| r.raw_video.is_some()).count(),
+    })
 }
 
 impl Engine {
@@ -338,6 +356,28 @@ impl Engine {
         let me = self.clone();
         tokio::spawn(async move { me.apply(fx).await });
         Ok(p)
+    }
+
+    /// "Làm mới": sets the saved project aside (see `project::archive`) and starts again from the
+    /// images, keeping the old preset so text, music and output settings are not lost.
+    pub fn open_project_fresh(self: &Arc<Self>, image_dir: &Path) -> Result<Project, String> {
+        if let Some(r) = self.state.lock().unwrap().runner.as_ref().filter(|r| r.project.image_dir == image_dir) {
+            if r.project.rows.iter().any(import::busy) {
+                return Err("Dự án này đang tạo hoặc xuất video. Bấm Dừng và chờ xong rồi mới Làm mới.".into());
+            }
+        }
+        let images = scan_files(image_dir, &IMAGE_EXTS).map_err(|e| e.to_string())?;
+        if images.is_empty() {
+            return Err("Folder không có ảnh (jpg, png, webp)".into());
+        }
+        let preset = project::load(image_dir).ok().flatten().map(|p| p.preset);
+        project::archive(image_dir).map_err(|e| e.to_string())?;
+        let mut p = Project::new(image_dir.to_path_buf(), rows_from_images(images));
+        if let Some(preset) = preset {
+            p.preset = preset;
+        }
+        project::save(&p).map_err(|e| e.to_string())?;
+        self.open_project(image_dir)
     }
 
     /// Applies a user edit to the open project, saves it and notifies the UI.

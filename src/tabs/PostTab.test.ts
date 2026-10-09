@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, tick, unmount } from "svelte";
+import { ask } from "@tauri-apps/plugin-dialog";
 import PostTab from "./PostTab.svelte";
 import { PresetStore } from "../lib/presetStore.svelte";
 import { fixture } from "../lib/testFixtures";
@@ -8,7 +9,7 @@ import type { Project } from "../lib/types";
 const boundary = vi.hoisted(() => ({ invoke: vi.fn(), render: vi.fn(async () => null) }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: boundary.invoke, convertFileSrc: (p: string) => p }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => {} }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), ask: vi.fn(async () => true) }));
 vi.mock("../lib/overlay", () => ({ ensureFont: async () => "Arial", drawOverlay: vi.fn(), renderOverlayPng: boundary.render }));
 
 let target: HTMLDivElement, instance: ReturnType<typeof mount>, store: PresetStore, p: Project;
@@ -85,6 +86,22 @@ describe("PostTab batch tools", () => {
     const input = target.querySelectorAll<HTMLInputElement>('.list input[type="text"]')[0];
     input.value = "Tập 1"; input.dispatchEvent(new Event("change", { bubbles: true })); await settle();
     expect(call("update_row")).toEqual({ edit: expect.objectContaining({ stt: 1, text: "Tập 1" }), imageDir: "A" });
+  });
+});
+
+describe("PostTab deleting scenes", () => {
+  it("deletes the ticked scenes after confirming", async () => {
+    target.querySelectorAll<HTMLInputElement>(".list .item input[type=checkbox]")[2].click(); flushSync();
+    vi.mocked(ask).mockResolvedValueOnce(false);
+    button("Xoá cảnh đã tick (1)").click(); await settle();
+    expect(call("delete_rows")).toBeUndefined();
+    button("Xoá cảnh đã tick (1)").click(); await settle();
+    expect(call("delete_rows")).toEqual({ stts: [3], imageDir: "A" });
+  });
+  it("ticks every scene at once", async () => {
+    target.querySelector<HTMLInputElement>(".tools input[type=checkbox]")!.click(); flushSync();
+    expect(button("Xoá cảnh đã tick (3)").disabled).toBe(false);
+    expect(button("Xuất dòng chọn (2)").disabled).toBe(false);
   });
 });
 

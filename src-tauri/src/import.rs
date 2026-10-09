@@ -39,10 +39,14 @@ pub fn add_rows(rows: &mut Vec<Row>, n: usize) -> Vec<u32> {
     }).collect()
 }
 
+/// The extension or FFmpeg is still working on this row.
+pub fn busy(r: &Row) -> bool {
+    r.status.is_active() || matches!(r.status, RowStatus::Downloaded | RowStatus::PostProcessing)
+}
+
 /// Removes the selected rows unless the extension or FFmpeg is still working on them.
 /// Returns the STTs that were kept because they are busy.
 pub fn delete_rows(rows: &mut Vec<Row>, stts: &[u32]) -> Vec<u32> {
-    let busy = |r: &Row| r.status.is_active() || matches!(r.status, RowStatus::Downloaded | RowStatus::PostProcessing);
     let kept: Vec<u32> = rows.iter().filter(|r| stts.contains(&r.stt) && busy(r)).map(|r| r.stt).collect();
     rows.retain(|r| !stts.contains(&r.stt) || busy(r));
     kept

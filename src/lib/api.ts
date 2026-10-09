@@ -2,10 +2,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { FontInfo, Preset, Project, Status, TextStyle } from "./types";
 
+/** What a folder's saved project holds. */
+export interface ProjectPeek { rows: number; prompts: number; videos: number }
 export interface McpInfo { command: string; args: string[]; claudeCode: string; claudeDesktop: string; codex: string }
 
 export const api = {
-  openProject: (dir: string) => invoke<Project>("open_project", { dir }),
+  /** fresh: set the saved project aside and start again from the images. */
+  openProject: (dir: string, fresh = false) => invoke<Project>("open_project", { dir, fresh }),
+  peekProject: (dir: string) => invoke<ProjectPeek | null>("peek_project", { dir }),
   getProject: () => invoke<Project | null>("get_project"),
   updateRow: (edit: { stt: number; prompt: string; text: string; music: string | null; textOverride: TextStyle | null }, imageDir: string) => invoke<void>("update_row", { edit, imageDir }),
   setCommonPrompt: (text: string) => invoke<void>("set_common_prompt", { text }),

@@ -33,7 +33,7 @@ pub fn tools() -> Vec<Value> {
     let none = json!({});
     vec![
         tool("status", "Trạng thái 1Click Video Tool: extension Vids đã kết nối chưa, có FFmpeg không, đang chạy không, tóm tắt dự án đang mở.", none.clone(), &[]),
-        tool("open_project", "Mở một folder ảnh làm dự án (folder là kho ảnh; lần đầu mỗi ảnh thành một dòng prompt).", json!({ "folder": { "type": "string", "description": "Đường dẫn tuyệt đối tới folder ảnh" } }), &["folder"]),
+        tool("open_project", "Mở một folder ảnh làm dự án (folder là kho ảnh; lần đầu mỗi ảnh thành một dòng prompt). Mở lại folder cũ sẽ tiếp tục dự án đã lưu (prompt, video đã tạo); fresh=true để làm mới từ ảnh (dự án cũ được cất vào _1click/cu-…, giữ thiết lập).", json!({ "folder": { "type": "string", "description": "Đường dẫn tuyệt đối tới folder ảnh" }, "fresh": { "type": "boolean", "description": "true = bỏ dự án đã lưu, bắt đầu lại từ ảnh" } }), &["folder"]),
         tool("get_project", "Xem toàn bộ dự án: các dòng (STT, ảnh, prompt, text, nhạc, trạng thái, file đầu ra) và thiết lập.", none.clone(), &[]),
         tool("list_images", "Liệt kê tên ảnh trong folder ảnh của dự án (kho ảnh để gán cho prompt).", none.clone(), &[]),
         tool("add_prompts", "Thêm một dòng cho mỗi prompt. 'images' (tên ảnh trong kho) dùng chung cho mọi dòng mới, ví dụ 2 ảnh tham chiếu cho 10 prompt. 'texts' là chữ trên video theo thứ tự.", json!({ "prompts": str_list("Các prompt (nên viết tiếng Anh)"), "images": str_list("Tên ảnh trong kho, dùng chung cho các dòng mới"), "texts": str_list("Chữ trên video cho từng dòng mới, theo thứ tự") }), &["prompts"]),

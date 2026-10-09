@@ -34,6 +34,32 @@ pub fn load(image_dir: &Path) -> Result<Option<Project>> {
     Ok(Some(p))
 }
 
+/// Moves the saved project and its work files (raw videos, overlays) into `_1click/cu-<time>/`,
+/// so the folder opens as a new project without losing or overwriting earlier videos.
+/// Returns the archive folder, or None when there was no saved project.
+pub fn archive(image_dir: &Path) -> Result<Option<PathBuf>> {
+    let work = image_dir.join("_1click");
+    if !work.join(PROJECT_FILE).exists() {
+        return Ok(None);
+    }
+    let secs = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_secs()).unwrap_or(0);
+    let mut to = work.join(format!("cu-{secs}"));
+    let mut n = 1;
+    while to.exists() {
+        n += 1;
+        to = work.join(format!("cu-{secs}-{n}"));
+    }
+    fs::create_dir_all(&to)?;
+    for entry in fs::read_dir(&work)?.flatten() {
+        let name = entry.file_name();
+        if name.to_string_lossy().starts_with("cu-") {
+            continue;
+        }
+        fs::rename(entry.path(), to.join(&name)).with_context(|| format!("Không chuyển được {} vào {}", entry.path().display(), to.display()))?;
+    }
+    Ok(Some(to))
+}
+
 fn rebase_project(p: &mut Project, new_dir: &Path) {
     let old_dir = std::mem::replace(&mut p.image_dir, new_dir.to_path_buf());
     let rebase = |path: &mut PathBuf| {
@@ -170,6 +196,26 @@ mod tests {
         let new = tmp.path().join("b");
         std::fs::rename(&old, &new).unwrap();
         assert_eq!(load(&new).unwrap().unwrap().rows[0].images, vec![new.join("01.png")]);
+    }
+
+    #[test]
+    fn archive_moves_old_work_aside_and_keeps_earlier_archives() {
+        let tmp = tempfile::tempdir().unwrap();
+        let dir = tmp.path().join("ảnh");
+        std::fs::create_dir_all(&dir).unwrap();
+        save(&Project::new(dir.clone(), vec![Row::new(1, dir.join("1.png"))])).unwrap();
+        let work = dir.join("_1click");
+        std::fs::create_dir_all(work.join("raw")).unwrap();
+        std::fs::write(work.join("raw").join("001.mp4"), b"v").unwrap();
+        std::fs::create_dir_all(work.join("cu-1")).unwrap();
+
+        let to = archive(&dir).unwrap().unwrap();
+        assert!(load(&dir).unwrap().is_none(), "the folder opens as a new project afterwards");
+        assert!(to.starts_with(&work) && to.file_name().unwrap().to_string_lossy().starts_with("cu-"));
+        assert!(to.join(PROJECT_FILE).exists());
+        assert!(to.join("raw").join("001.mp4").exists(), "old videos are kept, not overwritten by new 001.mp4");
+        assert!(work.join("cu-1").exists() && !to.join("cu-1").exists(), "older archives stay where they are");
+        assert!(archive(&dir).unwrap().is_none(), "nothing to archive");
     }
 
     #[test]

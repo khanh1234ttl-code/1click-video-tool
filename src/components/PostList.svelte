@@ -2,6 +2,7 @@
   import { convertFileSrc } from "@tauri-apps/api/core";
   import { open } from "@tauri-apps/plugin-dialog";
   import { api } from "../lib/api";
+  import { confirmDelete } from "../lib/confirmDelete";
   import type { PresetStore } from "../lib/presetStore.svelte";
   import { statusLabel } from "../lib/textLayout";
   import type { Project, Row } from "../lib/types";
@@ -34,14 +35,26 @@
     try { await api.updateRow({ stt: row.stt, prompt: row.prompt, text: patch.text ?? row.text, music: patch.music === undefined ? row.music : patch.music, textOverride: row.textOverride }, project.imageDir); }
     catch (e) { toast(String(e)); }
   }
+  async function deletePicked() {
+    const stts = checked();
+    if (!stts.length || !(await confirmDelete(stts.length, "cảnh"))) return;
+    try {
+      const kept = await api.deleteRows(stts, project.imageDir);
+      picked = new Set(kept);
+      if (kept.length) toast(`Cảnh ${kept.join(", ")} đang xử lý nên chưa xoá`);
+    } catch (e) { toast(String(e)); }
+  }
+  function tickAll(on: boolean) { picked = new Set(on ? project.rows.map((r) => r.stt) : []); }
   function toggle(stt: number) { const s = new Set(picked); s.has(stt) ? s.delete(stt) : s.add(stt); picked = s; }
 </script>
 
 <div class="tools">
+  <label class="all" title="Chọn tất cả"><input type="checkbox" checked={picked.size > 0 && picked.size === project.rows.length} onchange={(e) => tickAll(e.currentTarget.checked)} /> Tất cả</label>
   <button onclick={() => (tool = tool === "paste" ? "" : "paste")} disabled={busy}>Dán nhiều text</button>
   <button onclick={() => (tool = tool === "template" ? "" : "template")} disabled={busy}>Text theo mẫu</button>
   <button onclick={assignMusic} disabled={busy} title="Lấy nhạc trong folder nhạc theo thứ tự tên, gán cho video 1, 2, 3…">Gán nhạc lần lượt</button>
   <button onclick={importTable} disabled={busy}>Nhập Excel/CSV</button>
+  <button class="del" onclick={deletePicked} disabled={busy || !picked.size} title="Bỏ các cảnh không cần khỏi dự án (không xoá file)">Xoá cảnh đã tick ({picked.size})</button>
 </div>
 {#if tool}
   <div class="batch">
@@ -75,6 +88,8 @@
 <style>
   .tools, .batch { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; padding: 6px 0; }
   .batch textarea, .batch input { flex: 1; }
+  .all { flex-direction: row; align-items: center; gap: 4px; color: var(--text); padding: 0 6px 0 8px; }
+  .del { color: var(--bad); }
   .hint { color: var(--muted); font-size: 12px; }
   .list { overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; background: var(--panel); }
   .item { display: grid; grid-template-columns: 20px 28px 48px 1fr 130px 64px; gap: 6px; align-items: center; padding: 4px 8px; border-bottom: 1px solid var(--line); cursor: pointer; }

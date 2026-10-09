@@ -18,6 +18,8 @@
   let selected = $state(project.rows[0]?.stt ?? 0);
   let picked = $state(new Set<number>());
   const row = $derived(project.rows.find((r) => r.stt === selected));
+  // The shown scene was deleted: show the first one left.
+  $effect(() => { if (!row && project.rows.length) selected = project.rows[0].stt; });
   const res = $derived(resolutionFor(store.preset.gen));
   const ready = $derived(project.rows.filter((r) => r.rawVideo).map((r) => r.stt));
   const pickedReady = $derived(ready.filter((s) => picked.has(s)));

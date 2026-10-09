@@ -1,7 +1,8 @@
 <script lang="ts">
   import { convertFileSrc } from "@tauri-apps/api/core";
   import { open } from "@tauri-apps/plugin-dialog";
-  import { api } from "../lib/api";
+  import { api, type ProjectPeek } from "../lib/api";
+  import { confirmDelete } from "../lib/confirmDelete";
   import { joinPath } from "../lib/paths";
   import { renderOverlays } from "../lib/exportOverlays";
   import type { PresetStore } from "../lib/presetStore.svelte";
@@ -27,6 +28,9 @@
   // Image picker: target = one row's STT, or null for the bulk rules.
   let picker: { target: number | null; chosen: string[] } | null = $state(null);
   let library: string[] = $state([]);
+  // The folder already has a saved project: continue it, start over, or cancel.
+  type Reopen = "continue" | "fresh" | null;
+  let reopen: { peek: ProjectPeek; answer: (c: Reopen) => void } | null = $state(null);
   $effect(() => onBusyChange(opening || busy || stopping));
   $effect(() => { common = project?.commonPrompt ?? ""; });
   let shownProject: string | undefined;
@@ -42,9 +46,12 @@
     try {
       await beforeNavigate();
       const dir = await open({ directory: true, title: "Chọn folder ảnh" });
-      if (typeof dir === "string") await api.openProject(dir);
+      if (typeof dir !== "string") return;
+      const peek = await api.peekProject(dir);
+      const choice: Reopen = peek ? await new Promise<Reopen>((answer) => (reopen = { peek, answer })) : "continue";
+      if (choice) await api.openProject(dir, choice === "fresh");
     } catch (e) { toast(String(e)); }
-    finally { opening = false; }
+    finally { reopen = null; opening = false; }
   }
   async function importTable() {
     const f = await open({ filters: [{ name: "Bảng", extensions: ["xlsx", "csv"] }] });
@@ -74,13 +81,14 @@
     try { await api.addRows(1, project.imageDir); } catch (e) { toast(String(e)); }
   }
   async function deleteTicked() {
-    if (!project) return;
+    if (!project || !(await confirmDelete(ticked.size, "dòng"))) return;
     try {
       const kept = await api.deleteRows(tickedList(), project.imageDir);
       ticked = new Set(kept);
       if (kept.length) toast(`Dòng ${kept.join(", ")} đang chạy nên chưa xoá`);
     } catch (e) { toast(String(e)); }
   }
+  function tickAll(on: boolean) { ticked = new Set(on ? project?.rows.map((r) => r.stt) : []); }
   function select(row: Row) { selected = row.stt; pasteFrom = row.stt; }
   function togglePaste() { showPaste = !showPaste; if (showPaste) pasteFrom = selected || 1; }
   async function paste() {
@@ -147,13 +155,27 @@
   </div>
 {/if}
 
+{#if reopen}
+  <div class="modal" role="dialog" aria-modal="true" aria-label="Folder đã có dự án">
+    <div class="box">
+      <h3>Folder này đã có dự án lưu trước đó</h3>
+      <p>{reopen.peek.rows} dòng, {reopen.peek.prompts} prompt, {reopen.peek.videos} video đã tạo.</p>
+      <p class="hint"><b>Mở tiếp</b>: làm tiếp với prompt và video cũ.<br /><b>Làm mới</b>: mỗi ảnh trong folder thành một dòng trống như lần đầu; thiết lập chữ, nhạc giữ nguyên. Dự án cũ và video gốc được cất vào <code>_1click/cu-…</code>, không bị xoá.</p>
+      <div class="actions">
+        <button class="primary" onclick={() => reopen?.answer("continue")}>Mở tiếp</button>
+        <button onclick={() => reopen?.answer("fresh")}>Làm mới</button>
+        <button onclick={() => reopen?.answer(null)}>Huỷ</button>
+      </div>
+    </div>
+  </div>
+{/if}
 {#if picker}
   <ImagePicker {library} bind:chosen={picker.chosen} target={picker.target} ticked={tickedList()} onassign={assign} onclose={() => (picker = null)} />
 {/if}
 {#if project}
   <div class="tablewrap">
     <table>
-      <thead><tr><th></th><th>STT</th><th>Ảnh</th><th>Prompt</th><th>Trạng thái</th><th></th></tr></thead>
+      <thead><tr><th><input type="checkbox" title="Chọn tất cả" checked={ticked.size > 0 && ticked.size === project.rows.length} onchange={(e) => tickAll(e.currentTarget.checked)} /></th><th>STT</th><th>Ảnh</th><th>Prompt</th><th>Trạng thái</th><th></th></tr></thead>
       <tbody>
         {#each project.rows as row (`${project.imageDir}:${row.stt}`)}
           <tr class:sel={selected === row.stt} onclick={() => select(row)}>
@@ -210,4 +232,8 @@
   .st { white-space: nowrap; }
   .st.done, .st.generated { color: var(--ok); } .st.failed { color: var(--bad); } .st.rendering, .st.sending, .st.postProcessing, .st.downloaded { color: var(--warn); }
   .empty { padding: 40px; color: var(--muted); }
+  .modal { position: fixed; inset: 0; z-index: 20; display: grid; place-items: center; background: rgba(0,0,0,.35); }
+  .box { max-width: 460px; padding: 16px 20px; background: var(--panel); border-radius: 10px; box-shadow: 0 8px 32px rgba(0,0,0,.25); }
+  .box h3 { margin: 0 0 8px; } .box .hint { color: var(--muted); font-size: 13px; }
+  .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 12px; }
 </style>

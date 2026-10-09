@@ -74,7 +74,7 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
-            commands::open_project, commands::get_project, commands::update_row, commands::set_common_prompt,
+            commands::open_project, commands::peek_project, commands::get_project, commands::update_row, commands::set_common_prompt,
             commands::paste_prompts, commands::paste_texts, commands::apply_text_template, commands::assign_music_in_order, commands::import_table, commands::list_images, commands::add_rows, commands::delete_rows, commands::assign_images, commands::set_preset, commands::list_presets,
             commands::save_preset, commands::load_preset, commands::save_overlays, commands::start_run,
             commands::pause_run, commands::retry_rows, commands::reprocess_rows, commands::get_status,

@@ -173,7 +173,9 @@ pub async fn dispatch(engine: &Arc<Engine>, method: &str, params: Value) -> Resu
         }
         "open_project" => {
             let folder = params.get("folder").and_then(Value::as_str).ok_or("Thiếu folder")?;
-            Ok(summary(&engine.open_project(Path::new(folder))?))
+            let fresh = params.get("fresh").and_then(Value::as_bool).unwrap_or(false);
+            let p = if fresh { engine.open_project_fresh(Path::new(folder))? } else { engine.open_project(Path::new(folder))? };
+            Ok(summary(&p))
         }
         "get_project" => {
             let p = open_project(engine)?;
@@ -388,6 +390,18 @@ mod tests {
         let got = dispatch(&e, "get_project", json!({})).await.unwrap();
         assert_eq!(got["rows"][0]["images"], json!(["2.png"]));
         assert_eq!(got["settings"]["gen"]["quality"], "1080p");
+    }
+
+    #[tokio::test]
+    async fn open_project_fresh_starts_over_instead_of_reloading_old_prompts() {
+        let (_tmp, e, dir, _) = fixture();
+        dispatch(&e, "open_project", json!({ "folder": dir })).await.unwrap();
+        dispatch(&e, "add_prompts", json!({ "prompts": ["cũ"] })).await.unwrap();
+        let again = dispatch(&e, "open_project", json!({ "folder": dir })).await.unwrap();
+        assert_eq!(again["rows"], 3, "reopening continues the saved project");
+        let fresh = dispatch(&e, "open_project", json!({ "folder": dir, "fresh": true })).await.unwrap();
+        assert_eq!(fresh["rows"], 2);
+        assert!(e.project().unwrap().rows.iter().all(|r| r.prompt.is_empty()));
     }
 
     #[tokio::test]

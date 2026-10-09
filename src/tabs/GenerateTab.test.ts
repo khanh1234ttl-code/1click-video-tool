@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushSync, mount, tick, unmount } from "svelte";
+import { ask, open } from "@tauri-apps/plugin-dialog";
 import GenerateTab from "./GenerateTab.svelte";
 import { reactiveStatus } from "./reactiveStatus.svelte";
 import { PresetStore } from "../lib/presetStore.svelte";
@@ -9,7 +10,7 @@ import type { Project, Row, Status } from "../lib/types";
 const boundary = vi.hoisted(() => ({ invoke: vi.fn() }));
 vi.mock("@tauri-apps/api/core", () => ({ invoke: boundary.invoke, convertFileSrc: (p: string) => p }));
 vi.mock("@tauri-apps/api/event", () => ({ listen: async () => () => {} }));
-vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn() }));
+vi.mock("@tauri-apps/plugin-dialog", () => ({ open: vi.fn(), ask: vi.fn(async () => true) }));
 // The mounted component stays real; only Canvas/font work is replaced.
 vi.mock("../lib/overlay", () => ({ ensureFont: async () => "Arial", drawOverlay: vi.fn(), renderOverlayPng: async () => null }));
 
@@ -232,5 +233,51 @@ describe("Ảnh cho từng prompt", () => {
     target.querySelectorAll<HTMLInputElement>("tbody input[type=checkbox]")[0].click(); flushSync();
     button("Xoá dòng đã tick (1)").click(); await settle();
     expect(boundary.invoke).toHaveBeenCalledWith("delete_rows", { stts: [1], imageDir: "A" });
+  });
+
+  it("ticks every row from the header box and asks before deleting", async () => {
+    await mountGen(idle);
+    target.querySelector<HTMLInputElement>("thead input[type=checkbox]")!.click(); flushSync();
+    vi.mocked(ask).mockResolvedValueOnce(false);
+    button("Xoá dòng đã tick (3)").click(); await settle();
+    expect(calls()).not.toContain("delete_rows");
+    button("Xoá dòng đã tick (3)").click(); await settle();
+    expect(boundary.invoke).toHaveBeenCalledWith("delete_rows", { stts: [1, 2, 3], imageDir: "A" });
+  });
+});
+
+describe("Reopening a folder that has a saved project", () => {
+  const saved = { rows: 3, prompts: 2, videos: 1 };
+  async function pickB(peek: unknown) {
+    vi.mocked(open).mockResolvedValueOnce("B");
+    const base = boundary.invoke.getMockImplementation()!;
+    boundary.invoke.mockImplementation(async (type: string, args: unknown) => (type === "peek_project" ? peek : base(type, args)));
+    await mountGen(idle);
+    button("Chọn folder ảnh").click(); await settle();
+  }
+  const opened = () => boundary.invoke.mock.calls.filter((c) => c[0] === "open_project").map((c) => c[1]);
+
+  it("opens a folder without saved work directly", async () => {
+    await pickB(null);
+    expect(opened()).toEqual([{ dir: "B", fresh: false }]);
+  });
+  it("asks, and Mở tiếp keeps the saved prompts and videos", async () => {
+    await pickB(saved);
+    expect(target.textContent).toContain("2 prompt");
+    expect(opened()).toEqual([]);
+    button("Mở tiếp").click(); await settle();
+    expect(opened()).toEqual([{ dir: "B", fresh: false }]);
+  });
+  it("Làm mới starts over from the images", async () => {
+    await pickB(saved);
+    button("Làm mới").click(); await settle();
+    expect(opened()).toEqual([{ dir: "B", fresh: true }]);
+  });
+  it("Huỷ opens nothing and unlocks the step", async () => {
+    await pickB(saved);
+    expect(busyChanges.at(-1)).toBe(true);
+    button("Huỷ").click(); await settle();
+    expect(opened()).toEqual([]);
+    expect(busyChanges.at(-1)).toBe(false);
   });
 });

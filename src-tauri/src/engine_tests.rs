@@ -961,3 +961,45 @@ fn shared_images_are_uploaded_once_and_listed_per_prompt() {
     assert_eq!(uploads, vec![(a, "j9-img1".to_string()), (b, "j9-img2".to_string()), (c, "j9-img3".to_string())]);
     assert_eq!(items, vec![(1, vec!["j9-img1".to_string(), "j9-img2".to_string()]), (2, vec!["j9-img1".to_string(), "j9-img2".to_string()]), (3, vec!["j9-img3".to_string(), "j9-img1".to_string()])]);
 }
+
+#[tokio::test]
+async fn peek_reports_saved_work_before_opening() {
+    let (tmp, e, dir) = fixture().await;
+    assert_eq!(peek_project(&tmp.path().join("nothing")), None);
+    e.edit(|p| {
+        p.rows[0].prompt = "mèo".into();
+        p.rows[0].raw_video = Some(dir.join("_1click/raw/001.mp4"));
+    })
+    .unwrap();
+    assert_eq!(peek_project(&dir), Some(ProjectPeek { rows: 1, prompts: 1, videos: 1 }));
+}
+
+#[tokio::test]
+async fn open_fresh_starts_from_the_images_keeps_the_preset_and_archives_old_work() {
+    let (_tmp, e, dir) = fixture().await;
+    e.edit(|p| {
+        p.rows[0].prompt = "mèo".into();
+        p.common_prompt = "chung".into();
+        p.preset.gen.quality = "1080p".into();
+        p.rows.push(crate::model::Row::empty(2));
+    })
+    .unwrap();
+    let p = e.open_project_fresh(&dir).unwrap();
+    assert_eq!(p.rows.len(), 1);
+    assert_eq!(p.rows[0].prompt, "");
+    assert_eq!(p.common_prompt, "");
+    assert_eq!(p.preset.gen.quality, "1080p", "settings are not lost");
+    assert_eq!(project::load(&dir).unwrap().unwrap(), p);
+    let archived: Vec<_> = std::fs::read_dir(dir.join("_1click")).unwrap().flatten().filter(|d| d.file_name().to_string_lossy().starts_with("cu-")).collect();
+    assert_eq!(archived.len(), 1);
+    assert!(archived[0].path().join(project::PROJECT_FILE).exists());
+}
+
+#[tokio::test]
+async fn open_fresh_refuses_while_rows_of_that_project_are_busy() {
+    let (_tmp, e, dir) = fixture().await;
+    e.edit(|p| p.rows[0].status = RowStatus::PostProcessing).unwrap();
+    let err = e.open_project_fresh(&dir).unwrap_err();
+    assert!(err.contains("Dừng"), "{err}");
+    assert_eq!(e.project().unwrap().rows[0].status, RowStatus::PostProcessing);
+}
