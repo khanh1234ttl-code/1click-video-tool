@@ -217,6 +217,26 @@ pub fn reset_extension(engine: Eng) {
 }
 
 #[tauri::command]
+pub fn overlays_rendered(engine: Eng, request_id: u64, error: Option<String>) {
+    engine.overlays_rendered(request_id, error)
+}
+
+/// How to connect an agent (MCP) to this install: the exact command for each agent.
+#[tauri::command]
+pub fn mcp_info() -> Result<serde_json::Value, String> {
+    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
+    let exe = exe.to_string_lossy().trim_start_matches(r"\\?\").to_string();
+    let quoted = format!("\"{exe}\"");
+    Ok(serde_json::json!({
+        "command": exe,
+        "args": ["--mcp"],
+        "claudeCode": format!("claude mcp add oneclick -- {quoted} --mcp"),
+        "claudeDesktop": serde_json::to_string_pretty(&serde_json::json!({ "mcpServers": { "oneclick": { "command": exe, "args": ["--mcp"] } } })).unwrap(),
+        "codex": format!("[mcp_servers.oneclick]\ncommand = {}\nargs = [\"--mcp\"]", serde_json::to_string(&exe).unwrap()),
+    }))
+}
+
+#[tauri::command]
 pub fn open_vids_browser(engine: Eng) -> Result<(), String> {
     engine.open_vids_browser()
 }

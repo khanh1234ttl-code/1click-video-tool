@@ -1,6 +1,7 @@
 pub mod bridge;
 pub mod browser;
 pub mod chrome_window;
+pub mod control;
 pub mod commands;
 pub mod engine;
 pub mod import;
@@ -30,6 +31,7 @@ pub fn run() {
                         EngineEvent::Project(p) => handle.emit("project", p),
                         EngineEvent::Status(s) => handle.emit("status", s),
                         EngineEvent::Toast(t) => handle.emit("toast", t),
+                        EngineEvent::RenderOverlays { request_id, stts } => handle.emit("render-overlays", serde_json::json!({ "requestId": request_id, "stts": stts })),
                     };
                 });
                 match tokio::net::TcpListener::bind(BRIDGE_ADDR).await {
@@ -50,6 +52,18 @@ pub fn run() {
                 engine.set_bundle(browser::Bundle { dir });
             }
             tauri::async_runtime::spawn(engine.clone().open_browser_if_unconnected(std::time::Duration::from_secs(8)));
+            // Control port for agents (MCP): local only, token-protected.
+            let control_engine = engine.clone();
+            tauri::async_runtime::spawn(async move {
+                let token = match control::load_or_create_token(&control_engine.app_dir()) {
+                    Ok(t) => t,
+                    Err(e) => return eprintln!("control token: {e}"),
+                };
+                match tokio::net::TcpListener::bind(control::CONTROL_ADDR).await {
+                    Ok(listener) => control::serve(listener, control_engine, token).await,
+                    Err(e) => eprintln!("control port {}: {e}", control::CONTROL_ADDR),
+                }
+            });
             app.manage(engine);
             Ok(())
         })
@@ -58,7 +72,7 @@ pub fn run() {
             commands::paste_prompts, commands::paste_texts, commands::apply_text_template, commands::assign_music_in_order, commands::import_table, commands::list_images, commands::add_rows, commands::delete_rows, commands::assign_images, commands::set_preset, commands::list_presets,
             commands::save_preset, commands::load_preset, commands::save_overlays, commands::start_run,
             commands::pause_run, commands::retry_rows, commands::reprocess_rows, commands::get_status,
-            commands::set_ffmpeg_dir, commands::reset_extension, commands::set_hide_chrome, commands::open_vids_browser, commands::list_fonts, commands::read_file_base64,
+            commands::set_ffmpeg_dir, commands::reset_extension, commands::set_hide_chrome, commands::open_vids_browser, commands::overlays_rendered, commands::mcp_info, commands::list_fonts, commands::read_file_base64,
             commands::list_music, commands::open_path
         ])
         .build(tauri::generate_context!())

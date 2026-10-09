@@ -10,11 +10,11 @@ use crate::project::{self, AppSettings};
 use crate::runner::{Effect, Runner};
 use futures_util::future::BoxFuture;
 use serde::Serialize;
-use std::collections::{BTreeMap, VecDeque};
+use std::collections::{BTreeMap, HashMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::sync::{mpsc, Semaphore};
+use tokio::sync::{mpsc, oneshot, Semaphore};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -66,6 +66,9 @@ pub enum EngineEvent {
     Project(Project),
     Status(Status),
     Toast(String),
+    /// Ask the window to draw these rows' text overlays (only the UI can draw text); it answers
+    /// with `overlays_rendered(request_id, error)`.
+    RenderOverlays { request_id: u64, stts: Vec<u32> },
 }
 
 struct State {
@@ -113,6 +116,8 @@ pub struct Engine {
     app_dir: PathBuf,
     notify: Arc<dyn Fn(EngineEvent) + Send + Sync>,
     ffmpeg_slots: Semaphore,
+    renders: Mutex<HashMap<u64, oneshot::Sender<Result<(), String>>>>,
+    next_render: std::sync::atomic::AtomicU64,
     #[cfg(test)]
     test_hooks: Arc<review_tests::TestHooks>,
 }
@@ -120,7 +125,7 @@ pub struct Engine {
 impl Engine {
     pub fn new(bridge: Bridge, app_dir: PathBuf, notify: Arc<dyn Fn(EngineEvent) + Send + Sync>) -> Arc<Engine> {
         let settings = project::load_settings(&app_dir);
-        Arc::new(Engine { state: Mutex::new(State { runner: None, settings, ext_version: None, epoch: 0, next_operation: 0, operations: BTreeMap::new(), chrome_bounds: None, chrome_visible_requested: None, bundle: None }), bridge, app_dir, notify, ffmpeg_slots: Semaphore::new(2), #[cfg(test)] test_hooks: Arc::new(review_tests::TestHooks::default()) })
+        Arc::new(Engine { state: Mutex::new(State { runner: None, settings, ext_version: None, epoch: 0, next_operation: 0, operations: BTreeMap::new(), chrome_bounds: None, chrome_visible_requested: None, bundle: None }), bridge, app_dir, notify, ffmpeg_slots: Semaphore::new(2), renders: Mutex::new(HashMap::new()), next_render: std::sync::atomic::AtomicU64::new(1), #[cfg(test)] test_hooks: Arc::new(review_tests::TestHooks::default()) })
     }
 
     pub fn app_dir(&self) -> PathBuf {
@@ -147,6 +152,30 @@ impl Engine {
             hide_chrome: st.settings.hide_chrome,
             chrome_window: st.chrome_bounds.is_some(),
             bundled_browser: st.bundle.as_ref().is_some_and(Bundle::has_browser),
+        }
+    }
+
+    /// Has the window draw the text overlays of `stts` and waits for it (agents cannot draw text).
+    pub async fn request_overlays(&self, stts: Vec<u32>, timeout: Duration) -> Result<(), String> {
+        if stts.is_empty() {
+            return Ok(());
+        }
+        let request_id = self.next_render.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        let (tx, rx) = oneshot::channel();
+        self.renders.lock().unwrap().insert(request_id, tx);
+        (self.notify)(EngineEvent::RenderOverlays { request_id, stts });
+        let result = tokio::time::timeout(timeout, rx).await;
+        self.renders.lock().unwrap().remove(&request_id);
+        match result {
+            Ok(Ok(r)) => r,
+            _ => Err("Cửa sổ 1Click Video Tool không vẽ chữ kịp; hãy để cửa sổ tool mở rồi thử lại".into()),
+        }
+    }
+
+    /// The window's answer to a `RenderOverlays` request.
+    pub fn overlays_rendered(&self, request_id: u64, error: Option<String>) {
+        if let Some(tx) = self.renders.lock().unwrap().remove(&request_id) {
+            let _ = tx.send(error.map_or(Ok(()), Err));
         }
     }
 
