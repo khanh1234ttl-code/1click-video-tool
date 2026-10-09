@@ -27,6 +27,24 @@ pub struct Status {
     pub chrome_window: bool,
 }
 
+/// Each distinct image is uploaded once per job (`<job>-img<n>`, in first-use order); every
+/// prompt then lists the ids of its own images.
+pub(crate) fn plan_uploads(job_id: &str, rows: &[(u32, Vec<PathBuf>)]) -> (Vec<(PathBuf, String)>, Vec<(u32, Vec<String>)>) {
+    let mut uploads: Vec<(PathBuf, String)> = Vec::new();
+    let items = rows.iter().map(|(stt, images)| {
+        let ids = images.iter().map(|p| match uploads.iter().find(|(q, _)| q == p) {
+            Some((_, id)) => id.clone(),
+            None => {
+                let id = format!("{job_id}-img{}", uploads.len() + 1);
+                uploads.push((p.clone(), id.clone()));
+                id
+            }
+        }).collect();
+        (*stt, ids)
+    }).collect();
+    (uploads, items)
+}
+
 #[cfg(test)]
 #[path = "engine_tests.rs"]
 mod review_tests;
@@ -517,16 +535,14 @@ impl Engine {
         if !operations.iter().all(|op| Self::operation_matches(&self.state.lock().unwrap(), op)) { return (epoch, vec![]); }
         let Some(first) = operations.first() else { return (epoch, vec![]); };
         let project = first.project.clone();
-        let paths: Vec<_> = operations.iter().map(|op| (op.stt, op.project.row(op.stt).unwrap().first_image().cloned())).collect();
+        let rows: Vec<(u32, Vec<PathBuf>)> = operations.iter().map(|op| (op.stt, op.project.row(op.stt).unwrap().images.clone())).collect();
+        let (uploads, image_ids) = plan_uploads(&job_id, &rows);
         #[cfg(test)]
         let hooks = self.test_hooks.clone();
         let encoded = tokio::task::spawn_blocking(move || {
             #[cfg(test)]
             hooks.checkpoint_blocking(review_tests::Boundary::Encode);
-            paths.into_iter().map(|(stt, p)| (stt, match p {
-                Some(p) => media::encode_image_for_upload(&p),
-                None => Err(anyhow::anyhow!("Dòng {stt} chưa có ảnh")),
-            })).collect::<Vec<_>>()
+            uploads.into_iter().map(|(p, id)| (id, media::encode_image_for_upload(&p))).collect::<Vec<_>>()
         }).await;
         // The checks and all transport enqueueing share the mutation mutex with Pause/Open.
         let mut st = self.state.lock().unwrap();
@@ -535,18 +551,21 @@ impl Engine {
             Ok(values) => values,
             Err(err) => return self.revert_locked(&mut st, &job_id, &err.to_string()),
         };
-        let mut items = Vec::new();
-        for (stt, res) in encoded {
+        for (id, res) in encoded {
             let (name, base64) = match res {
                 Ok(v) => v,
                 Err(err) => return self.revert_locked(&mut st, &job_id, &err.to_string()),
             };
-            let id = format!("{job_id}-{stt}");
-            if !self.bridge.send(&ToExt::ImagePut { id: id.clone(), name, base64 }) {
+            if !self.bridge.send(&ToExt::ImagePut { id, name, base64 }) {
                 return self.revert_locked(&mut st, &job_id, "Mất kết nối extension");
             }
-            items.push(JobItem { index: stt, prompt: project.effective_prompt(project.row(stt).unwrap()), image_id: id });
         }
+        let items = image_ids.into_iter().map(|(stt, ids)| JobItem {
+            index: stt,
+            prompt: project.effective_prompt(project.row(stt).unwrap()),
+            image_id: ids.first().cloned().unwrap_or_default(),
+            image_ids: ids,
+        }).collect();
         let g = &project.preset.gen;
         let settings = JobSettings { mode: g.mode.as_ext().into(), aspect_ratio: g.aspect_ratio.clone(), quality: g.quality.clone(), concurrency: g.concurrency, max_retries: g.max_retries };
         if !self.bridge.send(&ToExt::JobSubmit { job_id: job_id.clone(), settings, items }) {

@@ -108,8 +108,12 @@ async function handle(msg) {
     case "job.submit": {
       const { jobId, settings, items } = msg;
       if (submitting.has(jobId)) return;
+      // A prompt may use several images, and several prompts may share one (sent once).
+      const idsOf = (it) => (Array.isArray(it.imageIds) && it.imageIds.length ? it.imageIds : [it.imageId]);
+      const allIds = [...new Set(items.flatMap(idsOf))];
+      const forget = () => allIds.forEach((id) => images.delete(id));
       if (jobs[jobId]) {
-        items.forEach((it) => images.delete(it.imageId));
+        forget();
         return send({ type: "job.accepted", jobId });
       }
       const submission = { cancelled: false };
@@ -119,15 +123,15 @@ async function handle(msg) {
       try {
         tabId = await ensureVidsTab();
         checkCancelled();
-        for (const it of items) {
-          const data = images.get(it.imageId);
-          if (!data) throw new Error(`Thiếu ảnh ${it.imageId}`);
-          const prepared = await chrome.tabs.sendMessage(tabId, { type: "PREPARE_IMAGE", id: it.imageId, data });
+        for (const id of allIds) {
+          const data = images.get(id);
+          if (!data) throw new Error(`Thiếu ảnh ${id}`);
+          const prepared = await chrome.tabs.sendMessage(tabId, { type: "PREPARE_IMAGE", id, data });
           checkCancelled();
           if (!prepared || prepared.success === false) throw new Error((prepared && prepared.error) || "Extension không nhận ảnh");
         }
         const payloads = items.map((it) => ({
-          prompt: it.prompt, mode: settings.mode, imageIds: [it.imageId], aspectRatio: settings.aspectRatio, outputCount: 1,
+          prompt: it.prompt, mode: settings.mode, imageIds: idsOf(it), aspectRatio: settings.aspectRatio, outputCount: 1,
           promptIndex: it.index, autoDownloadResourceQuality: settings.quality, isConcat: false, maxRetries: settings.maxRetries,
           autoChangeFileName: true, folderName: `${FOLDER_ROOT}/${jobId}`,
         }));
@@ -140,12 +144,12 @@ async function handle(msg) {
       } catch (e) {
         delete jobs[jobId];
         saveJobs();
-        items.forEach((it) => images.delete(it.imageId));
+        forget();
         return send({ type: "job.rejected", jobId, error: String((e && e.message) || e) });
       } finally {
         submitting.delete(jobId);
       }
-      items.forEach((it) => images.delete(it.imageId));
+      forget();
       return send({ type: "job.accepted", jobId });
     }
     case "job.cancel": {

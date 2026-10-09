@@ -25,7 +25,9 @@ pub struct JobSettings {
 pub struct JobItem {
     pub index: u32,
     pub prompt: String,
+    /// First image; bridges before multi-image prompts read only this.
     pub image_id: String,
+    pub image_ids: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -282,13 +284,14 @@ mod tests {
         let m = ToExt::JobSubmit {
             job_id: "j1".into(),
             settings: JobSettings { mode: "imageToVideo".into(), aspect_ratio: "16:9".into(), quality: "720p".into(), concurrency: 3, max_retries: 2 },
-            items: vec![JobItem { index: 1, prompt: "p".into(), image_id: "j1-1".into() }],
+            items: vec![JobItem { index: 1, prompt: "p".into(), image_id: "j1-img1".into(), image_ids: vec!["j1-img1".into(), "j1-img2".into()] }],
         };
         let v: serde_json::Value = serde_json::to_value(&m).unwrap();
         assert_eq!(v["type"], "job.submit");
         assert_eq!(v["jobId"], "j1");
         assert_eq!(v["settings"]["aspectRatio"], "16:9");
-        assert_eq!(v["items"][0]["imageId"], "j1-1");
+        assert_eq!(v["items"][0]["imageId"], "j1-img1", "kept for bridges that read one image");
+        assert_eq!(v["items"][0]["imageIds"], serde_json::json!(["j1-img1", "j1-img2"]));
         assert_eq!(serde_json::to_string(&ToExt::Ping).unwrap(), r#"{"type":"ping"}"#);
         let d: FromExt = serde_json::from_str(r#"{"type":"item.downloaded","jobId":"j1","index":3,"filePath":"E:\\AFF cám\\THÁNG 10\\1ClickBridge\\j1\\003_x_a.mp4"}"#).unwrap();
         assert_eq!(d, FromExt::ItemDownloaded { job_id: "j1".into(), index: 3, file_path: "E:\\AFF cám\\THÁNG 10\\1ClickBridge\\j1\\003_x_a.mp4".into() });

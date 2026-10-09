@@ -952,3 +952,12 @@ async fn window_info_is_remembered_and_hide_setting_persists() {
     e.restore_chrome();
     assert_eq!(e.state.lock().unwrap().chrome_visible_requested, Some(true));
 }
+
+#[test]
+fn shared_images_are_uploaded_once_and_listed_per_prompt() {
+    let (a, b, c) = (PathBuf::from("a.png"), PathBuf::from("b.png"), PathBuf::from("c.png"));
+    let rows = vec![(1, vec![a.clone(), b.clone()]), (2, vec![a.clone(), b.clone()]), (3, vec![c.clone(), a.clone()])];
+    let (uploads, items) = plan_uploads("j9", &rows);
+    assert_eq!(uploads, vec![(a, "j9-img1".to_string()), (b, "j9-img2".to_string()), (c, "j9-img3".to_string())]);
+    assert_eq!(items, vec![(1, vec!["j9-img1".to_string(), "j9-img2".to_string()]), (2, vec!["j9-img1".to_string(), "j9-img2".to_string()]), (3, vec!["j9-img3".to_string(), "j9-img1".to_string()])]);
+}

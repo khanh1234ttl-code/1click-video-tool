@@ -331,3 +331,17 @@ test("re-reports bounds when the Vids window moves", async (t) => {
   for (const f of listeners.bounds) f({ ...chrome.__wins[1] });
   assert.equal((await next("window.info")).left, 300);
 });
+
+test("prompts sharing reference images prepare each image once and pass every imageId", async (t) => {
+  const { ws, next, sent } = await setup(t);
+  for (const i of [1, 2]) ws.send(JSON.stringify({ type: "image.put", id: `j2-img${i}`, name: `ref${i}.jpg`, base64: "data:image/jpeg;base64,AAA" }));
+  ws.send(JSON.stringify({
+    type: "job.submit", jobId: "j2",
+    settings: { mode: "componentsToVideo", aspectRatio: "16:9", quality: "720p", concurrency: 3, maxRetries: 0 },
+    items: [1, 2, 3].map((index) => ({ index, prompt: `p${index}`, imageId: "j2-img1", imageIds: ["j2-img1", "j2-img2"] })),
+  }));
+  assert.equal((await next("job.accepted")).jobId, "j2");
+  assert.deepEqual(sent.filter((s) => s.msg.type === "PREPARE_IMAGE").map((s) => s.msg.id), ["j2-img1", "j2-img2"]);
+  const fill = sent.find((s) => s.msg.type === "AUTO_FILL_VIDS").msg;
+  assert.deepEqual(fill.payloads.map((p) => p.imageIds), [["j2-img1", "j2-img2"], ["j2-img1", "j2-img2"], ["j2-img1", "j2-img2"]]);
+});
