@@ -133,12 +133,17 @@ pub fn find_tool(name: &str, configured: Option<&Path>) -> Option<PathBuf> {
     find_tool_in(name, configured, None)
 }
 
+/// `ffmpeg.exe` on Windows, `ffmpeg` elsewhere.
+pub fn tool_file_name(name: &str) -> String {
+    if cfg!(windows) { format!("{name}.exe") } else { name.to_string() }
+}
+
 /// The user's chosen file first, then the copy bundled with the installer, then PATH.
 pub fn find_tool_in(name: &str, configured: Option<&Path>, bundled: Option<&Path>) -> Option<PathBuf> {
     if let Some(c) = configured.filter(|c| c.is_file()) {
         return Some(c.to_path_buf());
     }
-    let exe = format!("{name}.exe");
+    let exe = tool_file_name(name);
     if let Some(b) = bundled.map(|d| d.join(&exe)).filter(|p| p.is_file()) {
         return Some(b);
     }
@@ -301,5 +306,10 @@ mod tests {
         assert_eq!(find_tool_in("ffprobe", None, Some(&bundled)), Some(bundled.join("ffprobe.exe")));
         assert_eq!(find_tool_in("ffprobe", Some(&chosen), Some(&bundled)), Some(chosen));
         assert_eq!(find_tool_in("ffmpeg", None, Some(&bundled)), find_tool("ffmpeg", None), "not bundled: falls back to PATH");
+    }
+
+    #[test]
+    fn tool_files_have_the_platform_name() {
+        assert_eq!(tool_file_name("ffmpeg"), if cfg!(windows) { "ffmpeg.exe" } else { "ffmpeg" });
     }
 }

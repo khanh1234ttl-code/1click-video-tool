@@ -56,8 +56,8 @@ mod review_tests;
 /// Post-processing needs both tools: ffprobe validates downloads and sizes the overlay.
 fn missing_media_tools(ffmpeg: Option<&Path>, ffprobe: Option<&Path>) -> Option<String> {
     match (ffmpeg, ffprobe) {
-        (None, _) => Some("Không tìm thấy FFmpeg. Chọn thư mục FFmpeg trong tab Chạy.".into()),
-        (_, None) => Some("Không tìm thấy ffprobe (đi kèm FFmpeg). Chọn thư mục FFmpeg có ffprobe.exe trong tab Chạy.".into()),
+        (None, _) => Some("Không tìm thấy FFmpeg. Chọn thư mục FFmpeg trong menu đèn Extension.".into()),
+        (_, None) => Some("Không tìm thấy ffprobe (đi kèm FFmpeg). Chọn thư mục FFmpeg có ffprobe (menu đèn Extension).".into()),
         _ => None,
     }
 }
@@ -179,8 +179,13 @@ impl Engine {
             st.chrome_visible_requested = Some(visible);
             st.chrome_bounds
         };
-        if let Some(b) = bounds {
-            crate::chrome_window::set_visible(&b, visible);
+        // Windows hides the exact window; elsewhere the extension minimizes or restores it.
+        if cfg!(windows) {
+            if let Some(b) = bounds {
+                crate::chrome_window::set_visible(&b, visible);
+            }
+        } else {
+            self.bridge.send(&crate::bridge::window_state(visible));
         }
     }
 
@@ -436,9 +441,9 @@ impl Engine {
     }
 
     pub fn set_ffmpeg_dir(&self, dir: &Path) -> Result<(), String> {
-        let (ff, fp) = (dir.join("ffmpeg.exe"), dir.join("ffprobe.exe"));
+        let (ff, fp) = (dir.join(media::tool_file_name("ffmpeg")), dir.join(media::tool_file_name("ffprobe")));
         if !ff.is_file() || !fp.is_file() {
-            return Err("Thư mục phải chứa ffmpeg.exe và ffprobe.exe".into());
+            return Err(format!("Thư mục phải chứa {} và {}", media::tool_file_name("ffmpeg"), media::tool_file_name("ffprobe")));
         }
         let mut st = self.state.lock().unwrap();
         st.settings.ffmpeg = Some(ff);

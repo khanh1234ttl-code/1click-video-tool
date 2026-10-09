@@ -44,6 +44,7 @@ function mockChrome({ loginRedirect = false, reply, storedJobs, restoreGate, sha
         return { ...wins[60], tabs: [{ id: 99, windowId: 60 }] };
       },
       get: async (id) => ({ ...wins[id] }),
+      update: async (id, props) => { created.push({ update: id, ...props }); Object.assign(wins[id], props); return { ...wins[id] }; },
       onBoundsChanged: { addListener: (f) => listeners.bounds.push(f) },
     },
     __created: created, __wins: wins,
@@ -344,4 +345,15 @@ test("prompts sharing reference images prepare each image once and pass every im
   assert.deepEqual(sent.filter((s) => s.msg.type === "PREPARE_IMAGE").map((s) => s.msg.id), ["j2-img1", "j2-img2"]);
   const fill = sent.find((s) => s.msg.type === "AUTO_FILL_VIDS").msg;
   assert.deepEqual(fill.payloads.map((p) => p.imageIds), [["j2-img1", "j2-img2"], ["j2-img1", "j2-img2"], ["j2-img1", "j2-img2"]]);
+});
+
+test("minimizes and restores the Vids window on request (macOS hiding)", async (t) => {
+  const { ws, next, chrome } = await setup(t);
+  ws.send(JSON.stringify({ type: "window.query" }));
+  await next("window.info");
+  ws.send(JSON.stringify({ type: "window.state", state: "minimized" }));
+  ws.send(JSON.stringify({ type: "window.state", state: "normal" }));
+  ws.send(JSON.stringify({ type: "window.state", state: "fullscreen" })); // not allowed: ignored
+  await new Promise((r) => setTimeout(r, 100));
+  assert.deepEqual(chrome.__created, [{ update: 1, state: "minimized" }, { update: 1, state: "normal" }]);
 });

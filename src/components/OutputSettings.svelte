@@ -9,7 +9,7 @@
 </script>
 
 <div class="row">
-  <label>Folder Output <button onclick={pick} title={output.folder ?? ""}>{output.folder ?? "Mặc định: <folder ảnh>\\Output"}</button></label>
+  <label>Folder Output <button onclick={pick} title={output.folder ?? ""}>{output.folder ?? "Mặc định: thư mục Output trong folder ảnh"}</button></label>
   <label class="check"><input type="checkbox" bind:checked={output.overwrite} /> Ghi đè file trùng tên</label>
   {#if output.folder}<button onclick={() => (output.folder = null)}>Dùng mặc định</button>{/if}
 </div>

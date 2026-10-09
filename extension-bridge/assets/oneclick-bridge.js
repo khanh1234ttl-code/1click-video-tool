@@ -97,6 +97,13 @@ async function handle(msg) {
   switch (msg.type) {
     case "ping":
       return send({ type: "pong" });
+    case "window.state": {
+      // Where the tool cannot hide the window itself (macOS) it minimizes or restores it here.
+      if (!["minimized", "normal"].includes(msg.state)) return;
+      await windowReady;
+      if (trackedWindow !== null) await chrome.windows.update(trackedWindow, { state: msg.state }).catch(() => {});
+      return;
+    }
     case "window.query": {
       const tab = await findVidsTab();
       if (tab) await reportWindow(tab.windowId);

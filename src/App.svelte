@@ -63,7 +63,7 @@
     setTimeout(() => (toasts = toasts.filter((x) => x.id !== id)), 6000);
   }
   async function pickFfmpeg() {
-    const dir = await open({ directory: true, title: "Chọn thư mục chứa ffmpeg.exe" });
+    const dir = await open({ directory: true, title: "Chọn thư mục chứa ffmpeg và ffprobe" });
     if (typeof dir === "string") await api.setFfmpegDir(dir).catch(toast);
   }
   onMount(() => {

@@ -2,6 +2,7 @@
   import { convertFileSrc } from "@tauri-apps/api/core";
   import { open } from "@tauri-apps/plugin-dialog";
   import { api } from "../lib/api";
+  import { joinPath } from "../lib/paths";
   import { renderOverlays } from "../lib/exportOverlays";
   import type { PresetStore } from "../lib/presetStore.svelte";
   import { statusLabel } from "../lib/textLayout";
@@ -183,7 +184,7 @@
     <button class="primary" disabled={busy || opening || status.running || !status.connected || !waiting} title={waiting ? "" : "Không còn dòng nào đang Chờ"} onclick={start}>Bắt đầu tạo</button>
     <button disabled={stopping || !status.running} onclick={stop} title="Hủy các video đang tạo; dòng chưa xong về Chờ">Dừng</button>
     <button disabled={!failed.length || busy} onclick={() => retry(failed)}>Thử lại {failed.length} dòng lỗi</button>
-    <button onclick={() => api.openPath(`${project.imageDir}\\_1click\\raw`)}>Mở folder video gốc</button>
+    <button onclick={() => api.openPath(joinPath(project.imageDir, "_1click", "raw"))}>Mở folder video gốc</button>
   </div>
 {:else}
   <p class="empty">Chọn một folder ảnh để bắt đầu. Ảnh được sắp theo tên (1, 2, 10…).</p>

@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onDestroy, untrack } from "svelte";
   import { api } from "../lib/api";
+  import { joinPath } from "../lib/paths";
   import { renderOverlays } from "../lib/exportOverlays";
   import type { PresetStore } from "../lib/presetStore.svelte";
   import { resolutionFor } from "../lib/textLayout";
@@ -107,7 +108,7 @@
   <span class="grow"></span>
   <button disabled={busy || !pickedReady.length} onclick={() => exportRows(pickedReady)}>Xuất dòng chọn ({pickedReady.length})</button>
   <button class="primary" disabled={busy || !ready.length} title={ready.length ? "" : "Tạo video ở bước 1 trước"} onclick={() => exportRows(ready)}>Xuất tất cả ({ready.length})</button>
-  <button onclick={() => api.openPath(store.preset.output.folder ?? `${project.imageDir}\\Output`)}>Mở folder Output</button>
+  <button onclick={() => api.openPath(store.preset.output.folder ?? joinPath(project.imageDir, "Output"))}>Mở folder Output</button>
 </div>
 
 <style>

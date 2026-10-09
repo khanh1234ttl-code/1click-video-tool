@@ -917,7 +917,7 @@ fn start_requires_both_ffmpeg_and_ffprobe() {
     assert_eq!(super::missing_media_tools(Some(ff), Some(fp)), None);
     assert!(super::missing_media_tools(None, Some(fp)).unwrap().contains("FFmpeg"));
     let no_probe = super::missing_media_tools(Some(ff), None).unwrap();
-    assert!(no_probe.contains("ffprobe") && no_probe.contains("tab Chạy"), "{no_probe}");
+    assert!(no_probe.contains("ffprobe") && no_probe.contains("đèn Extension"), "{no_probe}");
 }
 #[tokio::test]
 async fn generated_rows_are_claimed_for_export() {

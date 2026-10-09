@@ -11,7 +11,7 @@ pub struct Bundle {
 
 impl Bundle {
     pub fn chromium(&self) -> PathBuf {
-        self.dir.join("chromium").join("chrome.exe")
+        chromium_in(&self.dir, cfg!(target_os = "macos"))
     }
     pub fn extension(&self) -> PathBuf {
         self.dir.join("extension")
@@ -37,6 +37,12 @@ impl Bundle {
             .map(|_| ())
             .map_err(|e| format!("Không mở được trình duyệt Vids: {e}"))
     }
+}
+
+/// The Chromium executable inside the resource dir (an app bundle on macOS).
+pub fn chromium_in(dir: &Path, macos: bool) -> PathBuf {
+    let base = dir.join("chromium");
+    if macos { base.join("Chromium.app").join("Contents").join("MacOS").join("Chromium") } else { base.join("chrome.exe") }
 }
 
 /// Command-line for the Vids browser: its own profile, the extension, straight to Google Vids.
@@ -72,5 +78,12 @@ mod tests {
         assert_eq!(b.chromium(), PathBuf::from("C:/app/res").join("chromium").join("chrome.exe"));
         assert_eq!(b.extension(), PathBuf::from("C:/app/res").join("extension"));
         assert_eq!(b.ffmpeg_dir(), PathBuf::from("C:/app/res").join("ffmpeg"));
+    }
+
+    #[test]
+    fn chromium_lives_in_an_app_bundle_on_mac() {
+        let dir = Path::new("/Applications/1Click Video Tool.app/Contents/Resources");
+        assert_eq!(chromium_in(dir, true), dir.join("chromium").join("Chromium.app").join("Contents").join("MacOS").join("Chromium"));
+        assert_eq!(chromium_in(dir, false), dir.join("chromium").join("chrome.exe"));
     }
 }

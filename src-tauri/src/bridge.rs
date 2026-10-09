@@ -57,6 +57,13 @@ pub enum ToExt {
     /// Ask for the bounds of the window that runs Google Vids.
     #[serde(rename = "window.query")]
     WindowQuery,
+    /// Minimize ("minimized") or restore ("normal") the Vids window (used where the tool cannot hide it itself).
+    #[serde(rename = "window.state")]
+    WindowState { state: String },
+}
+
+pub fn window_state(visible: bool) -> ToExt {
+    ToExt::WindowState { state: if visible { "normal" } else { "minimized" }.into() }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -371,5 +378,12 @@ mod tests {
         assert!(connect(addr, None).await.is_err());
         assert!(!bridge.is_connected());
         assert!(!Bridge::offline().send(&ToExt::Ping));
+    }
+
+    #[test]
+    fn window_state_message_for_mac_hiding() {
+        assert_eq!(serde_json::to_string(&ToExt::WindowState { state: "minimized".into() }).unwrap(), r#"{"type":"window.state","state":"minimized"}"#);
+        assert_eq!(window_state(false), ToExt::WindowState { state: "minimized".into() });
+        assert_eq!(window_state(true), ToExt::WindowState { state: "normal".into() });
     }
 }
