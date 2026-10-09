@@ -1,0 +1,208 @@
+<title>Hướng dẫn 1Click Video Tool</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: a single reading column with a sticky table of contents on wide screens; steps are real sequences, so they are numbered. */
+:root {
+  --bg: #f5f7fb; --surface: #ffffff; --fg: #1d2330; --muted: #5d6679; --line: #dde2ec;
+  --accent: #2f6fed; --accent-soft: #e8efff; --ok: #1f8a4c; --warn: #b7791f; --bad: #c53b3b; --code-bg: #eef1f7;
+  --f-body: "Be Vietnam Pro", "Segoe UI", Arial, sans-serif;
+  --f-mono: "JetBrains Mono", Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #12151c; --surface: #1a1f29; --fg: #e6e9f0; --muted: #9aa3b5; --line: #2c3342;
+  --accent: #6f9bff; --accent-soft: #1f2a44; --ok: #4cc27f; --warn: #e0a84a; --bad: #ef7070; --code-bg: #232a37; color-scheme: dark } }
+:root[data-theme="dark"] {
+  --bg: #12151c; --surface: #1a1f29; --fg: #e6e9f0; --muted: #9aa3b5; --line: #2c3342;
+  --accent: #6f9bff; --accent-soft: #1f2a44; --ok: #4cc27f; --warn: #e0a84a; --bad: #ef7070; --code-bg: #232a37; color-scheme: dark }
+body { background: var(--bg); color: var(--fg); font: 15px/1.65 var(--f-body); padding-inline: 16px; padding-block: 0 64px; }
+.wrap { max-width: 1080px; margin: 0 auto; display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 40px; }
+nav.toc { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 24px); align-self: start; padding-top: 40px; font-size: 13.5px; }
+nav.toc p { margin: 0 0 8px; text-transform: uppercase; letter-spacing: .08em; font-size: 11.5px; color: var(--muted); font-weight: 600; }
+nav.toc a { display: block; color: var(--muted); text-decoration: none; padding: 4px 0 4px 10px; border-left: 2px solid var(--line); }
+nav.toc a:hover, nav.toc a:focus-visible { color: var(--accent); border-left-color: var(--accent); outline: none; }
+main { min-width: 0; }
+header.top { padding-block: 40px 8px; }
+.eyebrow { color: var(--accent); font-weight: 600; font-size: 13px; letter-spacing: .06em; text-transform: uppercase; margin: 0 0 6px; }
+h1 { font-size: clamp(28px, 4vw, 38px); line-height: 1.15; margin: 0 0 12px; text-wrap: balance; letter-spacing: -.01em; }
+.lead { color: var(--muted); font-size: 17px; max-width: 64ch; margin: 0; }
+h2 { font-size: 23px; margin: 56px 0 12px; text-wrap: balance; scroll-margin-top: 20px; }
+h3 { font-size: 17px; margin: 28px 0 8px; }
+p, li { max-width: 68ch; }
+a { color: var(--accent); }
+code, kbd { font-family: var(--f-mono); font-size: .88em; background: var(--code-bg); padding: 1px 6px; border-radius: 4px; }
+b.ui { font-weight: 600; color: var(--fg); background: var(--accent-soft); padding: 0 6px; border-radius: 4px; white-space: nowrap; }
+ol.steps { list-style: none; counter-reset: s; padding: 0; margin: 12px 0; display: grid; gap: 12px; }
+ol.steps > li { counter-increment: s; position: relative; padding-left: 40px; }
+ol.steps > li::before { content: counter(s); position: absolute; left: 0; top: 1px; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; font-weight: 700; font-size: 13px; display: grid; place-items: center; }
+figure { margin: 18px 0; }
+figure img { display: block; width: 100%; border: 1px solid var(--line); border-radius: 10px; }
+figure.narrow img { max-width: 640px; }
+figcaption { color: var(--muted); font-size: 13px; margin-top: 6px; }
+.flow { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 10px 0 4px; font-size: 13.5px; }
+.chip { border: 1px solid var(--line); background: var(--surface); padding: 2px 10px; border-radius: 999px; white-space: nowrap; }
+.chip.ok { color: var(--ok); border-color: currentColor; } .chip.warn { color: var(--warn); border-color: currentColor; } .chip.bad { color: var(--bad); border-color: currentColor; }
+.flow .arrow { color: var(--muted); }
+.note { border-left: 3px solid var(--warn); background: var(--surface); padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 16px 0; }
+.note.info { border-left-color: var(--accent); }
+.tablewrap { overflow-x: auto; margin: 12px 0; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+th { color: var(--muted); font-weight: 600; font-size: 12.5px; text-transform: uppercase; letter-spacing: .05em; background: var(--bg); }
+tr:last-child td { border-bottom: 0; }
+td code { white-space: nowrap; }
+.sheet td, .sheet th { font-family: var(--f-mono); font-size: 13px; text-transform: none; letter-spacing: 0; }
+.sheet .rn { color: var(--muted); width: 36px; text-align: right; }
+.sheet .hd { background: var(--accent); color: #fff; }
+.grid2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+dl.faq dt { font-weight: 600; margin-top: 16px; }
+dl.faq dd { margin: 4px 0 0; color: var(--fg); max-width: 68ch; }
+@media (max-width: 860px) { .wrap { grid-template-columns: 1fr; gap: 0; } nav.toc { position: static; padding-top: 24px; } .grid2 { grid-template-columns: 1fr; } }
+@media (prefers-reduced-motion: no-preference) { html { scroll-behavior: smooth; } }
+</style>
+
+<div class="wrap">
+<nav class="toc" aria-label="Mục lục">
+  <p>Mục lục</p>
+  <a href="#chuan-bi">Chuẩn bị</a>
+  <a href="#buoc-1">Bước 1 · Tạo video</a>
+  <a href="#buoc-2">Bước 2 · Hậu kỳ</a>
+  <a href="#hang-loat">Làm hàng loạt</a>
+  <a href="#excel">File Excel mẫu</a>
+  <a href="#trang-thai">Trạng thái và thử lại</a>
+  <a href="#hoi-dap">Hỏi đáp nhanh</a>
+</nav>
+
+<main>
+<header class="top">
+  <p class="eyebrow">1Click Video Tool · Hướng dẫn sử dụng</p>
+  <h1>Từ folder ảnh đến video có chữ và nhạc nền</h1>
+  <p class="lead">Tool gửi ảnh và prompt cho extension Vids Automation để tạo video Veo trên Google Vids, tải video về máy, rồi chèn chữ và nhạc nền cho từng video. Mọi thứ đi theo hai bước: <b class="ui">1. Tạo video</b> rồi <b class="ui">2. Hậu kỳ</b>.</p>
+</header>
+
+<h2 id="chuan-bi">Chuẩn bị (làm một lần)</h2>
+<ol class="steps">
+  <li>Mở Chrome, đăng nhập tài khoản Google dùng được Google Vids.</li>
+  <li>Cài extension <b>Vids Automation – 1 Click Studio</b> bản <code>1.1.10.0</code> trở lên. Sau mỗi lần cập nhật extension: mở <code>chrome://extensions</code>, tìm extension và bấm nút tải lại ↻.</li>
+  <li>Cài FFmpeg (có cả <code>ffmpeg.exe</code> và <code>ffprobe.exe</code>). Nếu tool báo <b class="ui">Thiếu FFmpeg</b> trên đầu cửa sổ, bấm vào đó và chọn thư mục chứa hai file này.</li>
+  <li>Cài tool bằng file <code>1Click Video Tool_0.1.0_x64-setup.exe</code> rồi mở tool. Đèn <b class="ui">● Extension v1.1.10.0</b> màu xanh ở góc phải là đã kết nối.</li>
+</ol>
+<div class="note info">Tool và Chrome phải cùng mở trong lúc tạo video. Tab Google Vids có thể để ẩn phía sau, không cần nhìn vào.</div>
+
+<h2 id="buoc-1">Bước 1 · Tạo video</h2>
+<figure>
+  <img alt="Màn hình bước 1: thanh công cụ, hàng cài đặt và bảng ảnh với prompt" src="data:image/jpeg;base64,{{step1}}">
+  <figcaption>Bước 1: mỗi ảnh là một dòng, prompt sửa thẳng trong bảng.</figcaption>
+</figure>
+<ol class="steps">
+  <li>Bấm <b class="ui">Chọn folder ảnh</b>. Ảnh (jpg, png, webp) được xếp theo tên tự nhiên: 1, 2, 10. Thứ tự này là STT của video và cũng là thứ tự dùng khi làm hàng loạt.</li>
+  <li>Nhập prompt bằng một trong các cách:
+    <ul>
+      <li>gõ thẳng vào ô prompt của từng dòng;</li>
+      <li><b class="ui">Prompt chung</b> ở ô dài phía trên, dùng cho mọi dòng chưa có prompt riêng;</li>
+      <li><b class="ui">Dán nhiều prompt</b>: mỗi dòng một prompt, điền lần lượt từ dòng đang chọn;</li>
+      <li><b class="ui">Nhập Excel/CSV</b>, xem <a href="#excel">file mẫu</a>.</li>
+    </ul>
+  </li>
+  <li>Chọn cài đặt trên hàng ngang: <b>Chế độ</b> (ảnh làm khung đầu hoặc ảnh tham chiếu), <b>Tỉ lệ</b> 16:9 hay 9:16, <b>Chất lượng</b> 720p/1080p, <b>Luồng</b> (số video tạo cùng lúc) và <b>Tự thử lại</b>.</li>
+  <li>Bấm <b class="ui">Bắt đầu tạo</b>. Mỗi dòng chạy qua các trạng thái dưới đây. Khi thành <span class="chip ok">Đã tạo</span>, bấm <b class="ui">Xem</b> để mở video gốc.</li>
+</ol>
+<div class="flow" aria-label="Các trạng thái ở bước 1">
+  <span class="chip">Chờ</span><span class="arrow">→</span><span class="chip warn">Đang gửi</span><span class="arrow">→</span><span class="chip warn">Render 40%</span><span class="arrow">→</span><span class="chip ok">Đã tạo</span>
+</div>
+<p>Ô <b class="ui">Tự hậu kỳ luôn sau khi tạo</b> mặc định tắt. Tick vào nếu muốn tạo xong là chèn chữ và nhạc ngay, dùng thiết lập đang có ở bước 2.</p>
+<div class="note">Mỗi video tạo ra tốn một lượt Veo của tài khoản Google. Khi thử cấu hình mới, nên chạy vài ảnh trước.</div>
+
+<h2 id="buoc-2">Bước 2 · Hậu kỳ (không tốn lượt Veo)</h2>
+<figure>
+  <img alt="Màn hình bước 2: danh sách video bên trái, khung xem trước phát video bên phải, mục Kiểu chữ bên dưới" src="data:image/jpeg;base64,{{step2}}">
+  <figcaption>Bước 2: khung xem trước phát chính video đã tạo, chữ phủ lên đúng vị trí sẽ xuất.</figcaption>
+</figure>
+<ol class="steps">
+  <li>Ở danh sách bên trái, gõ <b>text</b> của từng video và chọn <b>nhạc</b> (để <i>Nhạc tự động</i> thì nhạc lấy theo chế độ chung). Bấm vào một dòng để xem trước video đó.</li>
+  <li>Kéo chữ trên khung xem trước hoặc bấm một trong 9 nút hít để đặt vị trí. Chỉnh font, cỡ, màu, viền, bóng, nền hộp trong mục <b class="ui">Kiểu chữ</b>.</li>
+  <li>Muốn một video có kiểu hoặc vị trí khác hẳn, tick <b class="ui">Kiểu/vị trí chữ riêng cho video này</b>.</li>
+  <li>Mở mục <b class="ui">Nhạc nền</b>: chọn folder nhạc, chế độ (ngẫu nhiên, lần lượt, theo cột Nhạc), <b>âm lượng nhạc</b>, <b>âm gốc</b> của video Veo và thời gian fade.</li>
+  <li>Bấm <b class="ui">Xuất tất cả</b>, hoặc tick vài dòng rồi bấm <b class="ui">Xuất dòng chọn</b>. Video thành phẩm nằm trong <code>&lt;folder ảnh&gt;\Output</code>, tên dạng <code>001_tên-ảnh.mp4</code>.</li>
+</ol>
+<div class="grid2">
+  <figure class="narrow">
+    <img alt="Khung xem trước 9:16 hiển thị đúng tỉ lệ dọc" src="data:image/jpeg;base64,{{step2v}}">
+    <figcaption>Chọn tỉ lệ 9:16 ở bước 1 thì khung xem trước dựng dọc theo.</figcaption>
+  </figure>
+  <figure class="narrow">
+    <img alt="Khung hình trong video đã xuất, có chữ Tập 1 ở giữa phía dưới" src="data:image/jpeg;base64,{{export}}">
+    <figcaption>Video đã xuất: chữ đúng vị trí, có nhạc nền trộn dưới tiếng gốc.</figcaption>
+  </figure>
+</div>
+<p>Sửa chữ hoặc đổi nhạc xong thì bấm Xuất lại. Tool làm lại từ video gốc, nên làm bao nhiêu lần cũng không tốn thêm lượt Veo.</p>
+
+<h2 id="hang-loat">Làm hàng loạt</h2>
+<p>Các nút phía trên danh sách ở bước 2 đều đi theo STT của video:</p>
+<div class="tablewrap"><table>
+  <thead><tr><th>Nút</th><th>Làm gì</th><th>Ví dụ</th></tr></thead>
+  <tbody>
+    <tr><td><b class="ui">Dán nhiều text</b></td><td>Mỗi dòng dán vào là text của một video, điền từ dòng đang chọn trở xuống.</td><td>Dán 3 dòng khi đang chọn video 4 thì điền video 4, 5, 6.</td></tr>
+    <tr><td><b class="ui">Text theo mẫu</b></td><td><code>{stt}</code> thay bằng số thứ tự, <code>{ten}</code> thay bằng tên ảnh không đuôi. Áp dụng cho các dòng đã tick, không tick dòng nào thì áp dụng cho tất cả.</td><td><code>Tập {stt}</code> ra "Tập 1", "Tập 2"…</td></tr>
+    <tr><td><b class="ui">Gán nhạc lần lượt</b></td><td>Lấy file trong folder nhạc theo thứ tự tên, gán cho video 1, 2, 3…, hết bài thì quay lại bài đầu. Cột Nhạc hiện ngay để bạn sửa tay nếu cần.</td><td>3 bài, 5 video: 1, 2, 3, 1, 2.</td></tr>
+    <tr><td><b class="ui">Nhập Excel/CSV</b></td><td>Điền prompt, text, nhạc từ một bảng. Có ở cả hai bước.</td><td>Xem phần file mẫu ngay dưới.</td></tr>
+  </tbody>
+</table></div>
+
+<h2 id="excel">File Excel mẫu</h2>
+<p>Có ba file mẫu trong thư mục <code>samples</code> của tool:</p>
+<ul>
+  <li><code>mau-nhap-theo-ten-anh.xlsx</code>: khớp theo tên file ảnh, thứ tự dòng không quan trọng.</li>
+  <li><code>mau-nhap-theo-thu-tu.xlsx</code>: không có cột <code>anh</code>, dòng 1 là video 1, dòng 2 là video 2…</li>
+  <li><code>mau-nhap-theo-ten-anh.csv</code>: giống bản Excel theo tên, lưu dạng CSV UTF-8.</li>
+</ul>
+<div class="tablewrap"><table class="sheet" aria-label="Ví dụ sheet nhập theo tên ảnh">
+  <thead><tr><th class="rn"></th><th>A</th><th>B</th><th>C</th><th>D</th></tr></thead>
+  <tbody>
+    <tr><td class="rn">1</td><td class="hd">anh</td><td class="hd">prompt</td><td class="hd">text</td><td class="hd">nhac</td></tr>
+    <tr><td class="rn">2</td><td>01_thuyen-buom.png</td><td>the sailboat drifts gently on the waves at sunset</td><td>Tập 1</td><td>nhac-1.mp3</td></tr>
+    <tr><td class="rn">3</td><td>02_bai-bien.png</td><td>palm leaves sway in the breeze</td><td>Tập 2</td><td></td></tr>
+    <tr><td class="rn">4</td><td>03_dieu-giay.png</td><td>the red kite flutters in the wind</td><td>Tập 3</td><td>nhac-2.mp3</td></tr>
+  </tbody>
+</table></div>
+<div class="tablewrap"><table>
+  <thead><tr><th>Cột</th><th>Ý nghĩa</th><th>Ô trống thì sao</th></tr></thead>
+  <tbody>
+    <tr><td><code>anh</code></td><td>Tên file ảnh, có hoặc không có đuôi, không phân biệt hoa thường. Bỏ hẳn cột này để khớp theo thứ tự.</td><td>Dòng bị bỏ qua (khi khớp theo tên).</td></tr>
+    <tr><td><code>prompt</code></td><td>Mô tả chuyển động/cảnh cho Veo. Nên viết tiếng Anh.</td><td>Dùng Prompt chung.</td></tr>
+    <tr><td><code>text</code></td><td>Chữ hiện trên video ở bước 2.</td><td>Giữ text đang có.</td></tr>
+    <tr><td><code>nhac</code></td><td>Tên file nhạc trong folder nhạc đã chọn.</td><td>Nhạc theo chế độ chung.</td></tr>
+  </tbody>
+</table></div>
+<div class="note">Tool chỉ đọc <b>sheet đầu tiên</b> và cần dòng tiêu đề ở dòng 1. Ô trống không bao giờ xoá dữ liệu đang có. Khi lưu CSV, chọn <b>CSV UTF-8 (Comma delimited)</b> để giữ dấu tiếng Việt. Dòng nào không khớp được, tool báo lại sau khi nhập.</div>
+
+<h2 id="trang-thai">Trạng thái và thử lại</h2>
+<div class="tablewrap"><table>
+  <thead><tr><th>Trạng thái</th><th>Nghĩa là</th><th>Làm gì</th></tr></thead>
+  <tbody>
+    <tr><td><span class="chip">Chờ</span></td><td>Chưa gửi đi.</td><td>Bấm Bắt đầu tạo.</td></tr>
+    <tr><td><span class="chip warn">Đang gửi</span> <span class="chip warn">Render n%</span></td><td>Extension đang tạo video trên Google Vids.</td><td>Chờ. Bấm <b class="ui">Dừng</b> nếu muốn huỷ: dòng chưa xong về Chờ, chạy lại sẽ tốn lượt Veo.</td></tr>
+    <tr><td><span class="chip ok">Đã tạo</span></td><td>Video gốc đã về máy, chưa có chữ và nhạc.</td><td>Sang bước 2 và Xuất.</td></tr>
+    <tr><td><span class="chip warn">Hậu kỳ</span></td><td>Đang chèn chữ và nhạc.</td><td>Chờ vài giây.</td></tr>
+    <tr><td><span class="chip ok">Xong</span></td><td>Đã có video thành phẩm trong Output.</td><td>Bấm Xem, hoặc Xuất lại sau khi sửa.</td></tr>
+    <tr><td><span class="chip bad">Lỗi tạo video / tải về</span></td><td>Veo từ chối hoặc tải hỏng, sau khi extension đã tự thử lại theo ô Tự thử lại.</td><td>Sửa prompt nếu cần, bấm <b class="ui">Thử lại</b> trên dòng hoặc <b class="ui">Thử lại N dòng lỗi</b>. Tốn lượt Veo.</td></tr>
+    <tr><td><span class="chip bad">Lỗi hậu kỳ</span></td><td>FFmpeg lỗi, file nhạc hoặc font có vấn đề.</td><td>Kiểm tra rồi Xuất lại dòng đó. Không tốn lượt Veo.</td></tr>
+  </tbody>
+</table></div>
+<p>Ba dòng lỗi liên tiếp thì tool tự dừng: thường là tài khoản đã hết lượt tạo Veo trong ngày. Xem lý do lỗi (rê chuột vào trạng thái) trước khi thử lại.</p>
+
+<h2 id="hoi-dap">Hỏi đáp nhanh</h2>
+<dl class="faq">
+  <dt>Tắt tool giữa chừng thì sao?</dt>
+  <dd>Mở lại tool và chọn đúng folder ảnh. Dòng đang render được hỏi lại extension, không gửi lại; dòng Đã tạo giữ nguyên. Dữ liệu dự án nằm trong <code>&lt;folder ảnh&gt;\_1click</code>.</dd>
+  <dt>Chuyển folder ảnh sang ổ khác được không?</dt>
+  <dd>Được. Chuyển cả folder (kể cả <code>_1click</code> và <code>Output</code>) rồi mở lại trong tool, đường dẫn bên trong tự cập nhật.</dd>
+  <dt>Video Veo khác ảnh gốc một chút?</dt>
+  <dd>Veo giữ bố cục nhưng có thể vẽ lại vài chi tiết ở khung đầu. Video Veo có dấu ✦ nhỏ ở góc dưới bên phải.</dd>
+  <dt>Lưu thiết lập để dùng lại?</dt>
+  <dd>Gõ tên vào ô <b class="ui">Tên preset</b> trên đầu cửa sổ rồi bấm Lưu. Lần sau chọn trong ô <b class="ui">Preset…</b>.</dd>
+  <dt>Đèn Extension màu đỏ?</dt>
+  <dd>Mở Chrome có cài extension, rồi tải lại extension ở <code>chrome://extensions</code>. Bấm vào đèn để xem chi tiết hoặc chọn thư mục FFmpeg.</dd>
+</dl>
+</main>
+</div>
