@@ -130,10 +130,18 @@ pub fn run_tool(tool: &Path, args: &[String]) -> Result<String> {
 
 /// `configured` if it exists, otherwise `<name>.exe` found on PATH.
 pub fn find_tool(name: &str, configured: Option<&Path>) -> Option<PathBuf> {
+    find_tool_in(name, configured, None)
+}
+
+/// The user's chosen file first, then the copy bundled with the installer, then PATH.
+pub fn find_tool_in(name: &str, configured: Option<&Path>, bundled: Option<&Path>) -> Option<PathBuf> {
     if let Some(c) = configured.filter(|c| c.is_file()) {
         return Some(c.to_path_buf());
     }
     let exe = format!("{name}.exe");
+    if let Some(b) = bundled.map(|d| d.join(&exe)).filter(|p| p.is_file()) {
+        return Some(b);
+    }
     std::env::var_os("PATH").and_then(|paths| std::env::split_paths(&paths).map(|d| d.join(&exe)).find(|p| p.is_file()))
 }
 
@@ -280,5 +288,18 @@ mod tests {
     fn music_mix_uses_the_original_volume_parameter() {
         let a = build_args(Path::new("in.mp4"), None, Some(&mix()), 0.4, &probe_720(true), Path::new("out.mp4"));
         assert!(filter_of(&a).unwrap().contains("[0:a]volume=0.4[o]"), "{a:?}");
+    }
+
+    #[test]
+    fn bundled_tools_come_after_the_users_choice_and_before_path() {
+        let tmp = tempfile::tempdir().unwrap();
+        let bundled = tmp.path().join("ffmpeg");
+        std::fs::create_dir_all(&bundled).unwrap();
+        std::fs::write(bundled.join("ffprobe.exe"), b"x").unwrap();
+        let chosen = tmp.path().join("chosen.exe");
+        std::fs::write(&chosen, b"x").unwrap();
+        assert_eq!(find_tool_in("ffprobe", None, Some(&bundled)), Some(bundled.join("ffprobe.exe")));
+        assert_eq!(find_tool_in("ffprobe", Some(&chosen), Some(&bundled)), Some(chosen));
+        assert_eq!(find_tool_in("ffmpeg", None, Some(&bundled)), find_tool("ffmpeg", None), "not bundled: falls back to PATH");
     }
 }

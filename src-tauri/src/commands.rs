@@ -217,6 +217,11 @@ pub fn reset_extension(engine: Eng) {
 }
 
 #[tauri::command]
+pub fn open_vids_browser(engine: Eng) -> Result<(), String> {
+    engine.open_vids_browser()
+}
+
+#[tauri::command]
 pub fn set_hide_chrome(engine: Eng, hide: bool) -> Result<(), String> {
     engine.set_hide_chrome(hide)
 }

@@ -1,4 +1,5 @@
 pub mod bridge;
+pub mod browser;
 pub mod chrome_window;
 pub mod commands;
 pub mod engine;
@@ -45,6 +46,10 @@ pub fn run() {
                     }
                 }
             });
+            if let Ok(dir) = app.path().resource_dir() {
+                engine.set_bundle(browser::Bundle { dir });
+            }
+            tauri::async_runtime::spawn(engine.clone().open_browser_if_unconnected(std::time::Duration::from_secs(8)));
             app.manage(engine);
             Ok(())
         })
@@ -53,7 +58,7 @@ pub fn run() {
             commands::paste_prompts, commands::paste_texts, commands::apply_text_template, commands::assign_music_in_order, commands::import_table, commands::list_images, commands::add_rows, commands::delete_rows, commands::assign_images, commands::set_preset, commands::list_presets,
             commands::save_preset, commands::load_preset, commands::save_overlays, commands::start_run,
             commands::pause_run, commands::retry_rows, commands::reprocess_rows, commands::get_status,
-            commands::set_ffmpeg_dir, commands::reset_extension, commands::set_hide_chrome, commands::list_fonts, commands::read_file_base64,
+            commands::set_ffmpeg_dir, commands::reset_extension, commands::set_hide_chrome, commands::open_vids_browser, commands::list_fonts, commands::read_file_base64,
             commands::list_music, commands::open_path
         ])
         .build(tauri::generate_context!())

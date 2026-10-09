@@ -1,0 +1,13 @@
+{
+  "bundle": {
+    "resources": {
+      "vendor/chromium/**/*": "chromium/",
+      "vendor/ffmpeg/**/*": "ffmpeg/",
+      "vendor/extension/**/*": "extension/",
+      "vendor/THIRD_PARTY_NOTICES.txt": "THIRD_PARTY_NOTICES.txt"
+    },
+    "windows": {
+      "nsis": { "compression": "lzma" }
+    }
+  }
+}

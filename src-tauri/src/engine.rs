@@ -1,6 +1,7 @@
 //! Executes runner Effects: talks to the bridge, copies/probes downloads, runs ffmpeg (max 2),
 //! saves the project and notifies the UI.
 use crate::bridge::{Bridge, BridgeEvent, FromExt, JobItem, JobSettings, ToExt};
+use crate::browser::Bundle;
 use crate::chrome_window::Bounds;
 use crate::import::{rows_from_images, scan_files, IMAGE_EXTS};
 use crate::media::{self, MixParams};
@@ -12,6 +13,7 @@ use serde::Serialize;
 use std::collections::{BTreeMap, VecDeque};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::sync::{mpsc, Semaphore};
 
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -25,6 +27,8 @@ pub struct Status {
     pub hide_chrome: bool,
     /// The Vids window has been reported by the extension (so it can be hidden).
     pub chrome_window: bool,
+    /// The install carries its own Chromium + extension.
+    pub bundled_browser: bool,
 }
 
 /// Each distinct image is uploaded once per job (`<job>-img<n>`, in first-use order); every
@@ -72,6 +76,7 @@ struct State {
     next_operation: u64,
     operations: BTreeMap<u32, u64>,
     chrome_bounds: Option<Bounds>,
+    bundle: Option<Bundle>,
     /// Last visibility asked of the Vids window (also what tests observe).
     chrome_visible_requested: Option<bool>,
 }
@@ -115,7 +120,7 @@ pub struct Engine {
 impl Engine {
     pub fn new(bridge: Bridge, app_dir: PathBuf, notify: Arc<dyn Fn(EngineEvent) + Send + Sync>) -> Arc<Engine> {
         let settings = project::load_settings(&app_dir);
-        Arc::new(Engine { state: Mutex::new(State { runner: None, settings, ext_version: None, epoch: 0, next_operation: 0, operations: BTreeMap::new(), chrome_bounds: None, chrome_visible_requested: None }), bridge, app_dir, notify, ffmpeg_slots: Semaphore::new(2), #[cfg(test)] test_hooks: Arc::new(review_tests::TestHooks::default()) })
+        Arc::new(Engine { state: Mutex::new(State { runner: None, settings, ext_version: None, epoch: 0, next_operation: 0, operations: BTreeMap::new(), chrome_bounds: None, chrome_visible_requested: None, bundle: None }), bridge, app_dir, notify, ffmpeg_slots: Semaphore::new(2), #[cfg(test)] test_hooks: Arc::new(review_tests::TestHooks::default()) })
     }
 
     pub fn app_dir(&self) -> PathBuf {
@@ -124,7 +129,8 @@ impl Engine {
 
     fn tools(&self) -> (Option<PathBuf>, Option<PathBuf>) {
         let st = self.state.lock().unwrap();
-        (media::find_tool("ffmpeg", st.settings.ffmpeg.as_deref()), media::find_tool("ffprobe", st.settings.ffprobe.as_deref()))
+        let bundled = st.bundle.as_ref().map(Bundle::ffmpeg_dir);
+        (media::find_tool_in("ffmpeg", st.settings.ffmpeg.as_deref(), bundled.as_deref()), media::find_tool_in("ffprobe", st.settings.ffprobe.as_deref(), bundled.as_deref()))
     }
 
     pub fn status(&self) -> Status {
@@ -140,6 +146,29 @@ impl Engine {
             running: st.runner.as_ref().map_or(false, |r| r.running),
             hide_chrome: st.settings.hide_chrome,
             chrome_window: st.chrome_bounds.is_some(),
+            bundled_browser: st.bundle.as_ref().is_some_and(Bundle::has_browser),
+        }
+    }
+
+    /// Where the installer put FFmpeg, Chromium and the extension.
+    pub fn set_bundle(&self, bundle: Bundle) {
+        self.state.lock().unwrap().bundle = Some(bundle);
+    }
+
+    /// Opens Google Vids in the bundled browser (its own profile, extension loaded).
+    pub fn open_vids_browser(&self) -> Result<(), String> {
+        let bundle = self.state.lock().unwrap().bundle.clone().ok_or("Bản cài này không kèm trình duyệt Vids")?;
+        bundle.open(&self.app_dir.join("chromium-profile"))
+    }
+
+    /// At startup: a machine without the extension in its own Chrome gets the Vids browser.
+    pub async fn open_browser_if_unconnected(self: Arc<Self>, wait: Duration) {
+        tokio::time::sleep(wait).await;
+        let bundled = self.state.lock().unwrap().bundle.as_ref().is_some_and(Bundle::has_browser);
+        if bundled && !self.bridge.is_connected() {
+            if let Err(e) = self.open_vids_browser() {
+                (self.notify)(EngineEvent::Toast(e));
+            }
         }
     }
 
@@ -479,8 +508,8 @@ impl Engine {
         let p = st.runner.as_ref()?.project.clone();
         Some(Operation {
             epoch: st.epoch, id, stt, job_id: p.row(stt)?.job_id.clone(), postprocess, project: p,
-            ffmpeg: media::find_tool("ffmpeg", st.settings.ffmpeg.as_deref()),
-            ffprobe: media::find_tool("ffprobe", st.settings.ffprobe.as_deref()),
+            ffmpeg: media::find_tool_in("ffmpeg", st.settings.ffmpeg.as_deref(), st.bundle.as_ref().map(Bundle::ffmpeg_dir).as_deref()),
+            ffprobe: media::find_tool_in("ffprobe", st.settings.ffprobe.as_deref(), st.bundle.as_ref().map(Bundle::ffmpeg_dir).as_deref()),
         })
     }
 
