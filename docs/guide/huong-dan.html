@@ -70,6 +70,7 @@ dl.faq dd { margin: 4px 0 0; color: var(--fg); max-width: 68ch; }
   <a href="#hang-loat">Làm hàng loạt</a>
   <a href="#excel">File Excel mẫu</a>
   <a href="#an-chrome">Ẩn Chrome và Chạy nền</a>
+  <a href="#agent">Agent điều khiển (MCP)</a>
   <a href="#trang-thai">Trạng thái và thử lại</a>
   <a href="#hoi-dap">Hỏi đáp nhanh</a>
 </nav>
@@ -194,6 +195,7 @@ dl.faq dd { margin: 4px 0 0; color: var(--fg); max-width: 68ch; }
   <li>Bấm <b class="ui">Hiện Chrome</b> khi muốn xem lại. Tool cũng tự hiện cửa sổ khi Google bắt đăng nhập, khi job bị từ chối và khi bạn tắt tool.</li>
   <li>Lựa chọn Ẩn/Hiện được nhớ cho lần mở tool sau.</li>
 </ol>
+<p>Trên Mac, <b class="ui">Ẩn Chrome</b> thu nhỏ cửa sổ trình duyệt Vids vào Dock thay vì ẩn hẳn.</p>
 <h3>Nên bật thêm "Chạy nền" của extension</h3>
 <p>Chrome có thể tạm dừng một trang không hiển thị trên màn hình. Chế độ <b>Run in background / Chạy nền</b> của extension giữ cho tab Vids luôn chạy bằng cách chia sẻ tab đó (không ghi hình, không gửi đi đâu).</p>
 <ol class="steps">
@@ -201,6 +203,15 @@ dl.faq dd { margin: 4px 0 0; color: var(--fg); max-width: 68ch; }
   <li>Bấm <b class="ui">Run in background</b>, rồi trong hộp thoại của Chrome chọn đúng <b>tab Google Vids</b> (không chọn cửa sổ hay màn hình) và bấm Chia sẻ.</li>
   <li>Chỉ cần làm một lần cho mỗi lần mở trang Vids. Tool không bật hộ được vì Chrome bắt bạn tự chọn tab.</li>
 </ol>
+
+<h2 id="agent">Agent điều khiển tool (MCP)</h2>
+<p>Agent như Claude Code, Claude Desktop hay Codex điều khiển được tool đang mở trên cùng máy, ví dụ: “mở folder ảnh này, dùng 2 ảnh nhân vật cho 10 prompt sau, tạo video rồi xuất có chữ Tập 1…10”.</p>
+<ol class="steps">
+  <li>Bấm đèn <b class="ui">Extension</b> → <b class="ui">Kết nối agent (MCP)</b>.</li>
+  <li>Bấm <b class="ui">Copy</b> ở dòng của agent bạn dùng rồi dán vào nơi tương ứng: lệnh cho Claude Code, đoạn JSON cho Claude Desktop, đoạn TOML cho Codex.</li>
+  <li>Khởi động lại agent. Giữ cửa sổ 1Click Video Tool mở trong lúc agent làm việc, vì chữ trên video do cửa sổ này vẽ.</li>
+</ol>
+<div class="note">Tạo video tốn lượt Veo. Agent được dặn hỏi bạn trước khi gọi lệnh tạo video. Kết nối chỉ chạy trong máy (127.0.0.1) và cần mã bí mật của tool, nên trang web không điều khiển được tool.</div>
 
 <h2 id="trang-thai">Trạng thái và thử lại</h2>
 <div class="tablewrap"><table>

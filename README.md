@@ -79,6 +79,56 @@ Các cột `anh, prompt, text, nhac` (không cần đủ):
   - dòng Đã tạo giữ nguyên.
 - Có thể chuyển hoặc đổi tên cả folder ảnh: đường dẫn bên trong tự cập nhật.
 
+## Agent điều khiển tool (MCP)
+
+Agent như Claude Code, Claude Desktop hay Codex điều khiển được tool **đang mở** trên cùng máy: mở folder ảnh, thêm prompt và ảnh, chỉnh thiết lập, tạo video, chờ xong rồi xuất video có chữ và nhạc.
+
+- Bấm đèn **Extension** → **Kết nối agent (MCP)**. Khung này hiện sẵn lệnh và cấu hình đúng đường dẫn của máy, có nút Copy:
+  - **Claude Code**: `claude mcp add oneclick -- "<đường dẫn app>" --mcp`
+  - **Claude Desktop**: thêm `{"mcpServers":{"oneclick":{"command":"<đường dẫn app>","args":["--mcp"]}}}` vào `claude_desktop_config.json`
+  - **Codex**: thêm `[mcp_servers.oneclick]` với `command` và `args = ["--mcp"]` vào `~/.codex/config.toml`
+  - Đường dẫn app trên Mac: `/Applications/1Click Video Tool.app/Contents/MacOS/oneclick-video-tool`.
+- Tools có sẵn:
+  - xem và mở dự án: `status`, `open_project`, `get_project`, `list_images`;
+  - sửa dòng và ảnh: `add_prompts`, `update_rows`, `delete_rows`, `assign_images`;
+  - chữ, nhạc, thiết lập: `set_settings`, `apply_text_template`, `assign_music_in_order`, `import_table`;
+  - tạo video: `start_generation`, `stop_generation`, `retry_failed`;
+  - xuất và theo dõi: `export_videos`, `wait_until_idle`;
+  - trình duyệt: `open_vids_browser`, `set_hide_chrome`.
+- `start_generation` và `retry_failed` **tốn lượt Veo**; mô tả tool dặn agent hỏi bạn trước.
+- Chữ trên video vẫn do cửa sổ tool vẽ, nên tool phải đang mở khi agent xuất video.
+- An toàn:
+  - agent nói chuyện với tool qua cổng `127.0.0.1:17891`, chỉ trong máy;
+  - cần token lưu trong thư mục dữ liệu của tool (`control-token`);
+  - kết nối nào đến từ trang web đều bị chặn.
+
+## Chạy trên Mac (không ký Apple, dùng local)
+
+Build trên chính máy Mac (cần Xcode Command Line Tools, Rust, Node.js, Python 3):
+
+```bash
+bash scripts/build-mac.sh          # arm64 (chip Apple) hoặc x64, tự nhận theo máy
+```
+
+Script làm lần lượt:
+- tải Chromium cho Mac (ungoogled-chromium 154) và FFmpeg 9.0.2 cho Mac, kiểm tra SHA256 cố định;
+- build `1Click Video Tool.app`;
+- **ký tạm (ad hoc, không cần tài khoản Apple)**;
+- tạo `src-tauri/target/release/bundle/1Click-Video-Tool-<arch>.dmg`.
+
+Cài: mở dmg, kéo app vào Applications, rồi chạy một lần:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/1Click Video Tool.app"
+```
+
+Khác biệt trên Mac:
+- **Ẩn Chrome** chỉ thu nhỏ cửa sổ trình duyệt Vids vào Dock, không ẩn hẳn như trên Windows.
+- Bản Mac chưa được chạy thử thật. Khi build trên Mac cần kiểm tra:
+  - đăng nhập Google trên Chromium kèm theo;
+  - tạo 1 video thử;
+  - xuất video có chữ và nhạc.
+
 ## Lưu ý
 
 - Tạo video và thử lại lỗi tạo/tải video dùng lượt Veo của tài khoản Google. Khi thử cấu hình mới, nên bắt đầu với ít ảnh.

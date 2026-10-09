@@ -4,6 +4,23 @@ Ngày 08/10/2026. Người dùng yêu cầu commit và viết kế hoạch để
 
 Đọc `AGENTS.md`, `docs/HANDOFF-CODEX.md`, file này, rồi `docs/superpowers/plans/2026-10-08-claude-code-finish-video-tool.md`. Review toàn nhánh được lưu trong git tại `docs/reviews/2026-10-08-whole-branch-review.md`.
 
+## Cập nhật 09/10/2026 (4): macOS và MCP cho agent
+
+- **MCP**:
+  - `<app> --mcp` là server MCP qua stdio (`src-tauri/src/mcp.rs`, 19 tools), chuyển tiếp tới cổng điều khiển `127.0.0.1:17891` (`control.rs`, cần token `control-token`, chặn kết nối có Origin).
+  - Chữ trên video vẫn do UI vẽ, theo luồng sự kiện `render-overlays` rồi `overlays_rendered`.
+  - UI có khung "Kết nối agent (MCP)" hiện lệnh cho Claude Code, Claude Desktop và Codex.
+  - Đã chạy thật trên Windows bằng `scripts/mcp-smoke.mjs`; xem `docs/reviews/2026-10-09-mac-and-mcp.md`.
+- **macOS**:
+  - code dùng chung cho hai hệ điều hành;
+  - `fetch-vendor.py --platform mac-*`, `tauri.bundle.mac.conf.json`, `scripts/build-mac.sh` (ký tạm ad hoc, không cần tài khoản Apple);
+  - **chưa build và chưa chạy thử trên Mac**.
+- Bộ cài Windows: 198.4 MB, SHA256 `F3DC5C5A…DC0F` (code `e629f98`).
+- Kiểm tra:
+  - `cargo test`: unit 128, e2e 3, media 3;
+  - `npm test`: 68;
+  - `test:ext`: 17.
+
 ## Cập nhật 09/10/2026 (3): bản cài cho máy khách, nhiều ảnh cho mỗi prompt
 
 - **Bộ cài kèm Chromium 154, extension và FFmpeg 8.1**, nặng 198.2 MB, SHA256 `1A82BD90…6B4F`, code `0ce545e`.
