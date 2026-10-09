@@ -63,6 +63,16 @@ export class PresetStore {
     this.#lastWritten = json;
   }
 
+  /** Shows a preset saved elsewhere (an agent), unless the UI has edits not written yet. */
+  adopt(preset: Preset) {
+    const current = JSON.stringify($state.snapshot(this.preset));
+    if (this.#loading || current !== this.#lastWritten) return;
+    const json = JSON.stringify(preset);
+    if (json === current) return;
+    this.#lastWritten = this.#observed = json;
+    this.preset = structuredClone(preset);
+  }
+
   async flush(): Promise<void> {
     do {
       await tick();

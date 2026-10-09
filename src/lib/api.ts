@@ -2,6 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import type { FontInfo, Preset, Project, Status, TextStyle } from "./types";
 
+export interface McpInfo { command: string; args: string[]; claudeCode: string; claudeDesktop: string; codex: string }
+
 export const api = {
   openProject: (dir: string) => invoke<Project>("open_project", { dir }),
   getProject: () => invoke<Project | null>("get_project"),
@@ -15,6 +17,9 @@ export const api = {
   addRows: (count: number, imageDir: string) => invoke<number[]>("add_rows", { count, imageDir }),
   deleteRows: (stts: number[], imageDir: string) => invoke<number[]>("delete_rows", { stts, imageDir }),
   assignImages: (images: string[], rule: "all" | "roundRobin" | "onePerImage", stts: number[], imageDir: string) => invoke<number>("assign_images", { images, rule, stts, imageDir }),
+  overlaysRendered: (requestId: number, error: string | null) => invoke<void>("overlays_rendered", { requestId, error }),
+  mcpInfo: () => invoke<McpInfo>("mcp_info"),
+  onRenderOverlays: (f: (r: { requestId: number; stts: number[] }) => void) => listen<{ requestId: number; stts: number[] }>("render-overlays", (e) => f(e.payload)),
   openVidsBrowser: () => invoke<void>("open_vids_browser"),
   importTable: (path: string) => invoke<string[]>("import_table", { path }),
   setPreset: (preset: Preset, imageDir: string) => invoke<void>("set_preset", { preset, imageDir }),

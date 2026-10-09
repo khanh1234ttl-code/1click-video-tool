@@ -6,6 +6,8 @@
   import type { Project, Status } from "./lib/types";
   import GenerateTab from "./tabs/GenerateTab.svelte";
   import PostTab from "./tabs/PostTab.svelte";
+  import McpPanel from "./components/McpPanel.svelte";
+  import { renderOverlays } from "./lib/exportOverlays";
   let tab: "generate" | "post" = $state("generate");
   let project: Project | null = $state(null);
   let status: Status = $state({ connected: false, extId: null, extVersion: null, ffmpeg: null, running: false });
@@ -24,6 +26,19 @@
   });
   let presetName = $state("");
   let showConn = $state(false);
+  let showMcp = $state(false);
+  /** An agent asked for text overlays (only this window can draw text). */
+  async function renderForAgent(req: { requestId: number; stts: number[] }) {
+    try {
+      await store?.flush();
+      const p = await api.getProject();
+      if (!p) throw new Error("Chưa mở dự án");
+      await renderOverlays(p, req.stts);
+      await api.overlaysRendered(req.requestId, null);
+    } catch (e) {
+      await api.overlaysRendered(req.requestId, String(e)).catch(() => {});
+    }
+  }
   let navigation = 0;
   let projectRevision = 0;
   let navigating = $state(false);
@@ -53,6 +68,7 @@
       try { await store?.flush(); } catch (e) { toast(e); }
     }
     if (revision === projectRevision) {
+      if (!changed) store?.adopt(p.preset);
       project = p;
       if (changed) navigating = false;
     }
@@ -69,7 +85,7 @@
   onMount(() => {
     api.getProject().then((p) => (project = p));
     api.getStatus().then((s) => (status = s));
-    const offs = [api.onProject(receiveProject), api.onStatus((s) => (status = s)), api.onToast(toast)];
+    const offs = [api.onProject(receiveProject), api.onStatus((s) => (status = s)), api.onToast(toast), api.onRenderOverlays(renderForAgent)];
     return () => { offs.forEach((o) => o.then((f) => f())); store?.destroy(); };
   });
 </script>
@@ -102,8 +118,10 @@
       {#if status.extId}<button onclick={() => { api.resetExtension(); showConn = false; }}>Quên extension</button>{/if}
       {#if status.bundledBrowser}<button onclick={() => { showConn = false; api.openVidsBrowser().catch(toast); }}>Mở trình duyệt Vids</button>{/if}
       <button onclick={() => { showConn = false; pickFfmpeg(); }}>Chọn thư mục FFmpeg</button>
+      <button onclick={() => { showConn = false; showMcp = true; }}>Kết nối agent (MCP)</button>
     </div>
   {/if}
+  {#if showMcp}<McpPanel onclose={() => (showMcp = false)} {toast} />{/if}
 </header>
 <main inert={navigating}>
   {#if tab === "generate"}<GenerateTab {project} {store} {status} {toast} beforeNavigate={() => beforeNavigate(true)} onBusyChange={(b) => (stepBusy = b)} />

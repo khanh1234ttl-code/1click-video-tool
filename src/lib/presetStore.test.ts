@@ -73,6 +73,20 @@ describe("PresetStore", () => {
     store!.destroy(); store = null; gate.resolve(); await load; await settle();
     expect(writes.map((w) => w.type)).toEqual(["set_preset"]); expect(toasts).toEqual([]);
   });
+  it("adopts a preset changed elsewhere (an agent) when the UI has nothing unsaved", async () => {
+    make();
+    const agent = fixture().preset; agent.gen.quality = "1080p";
+    store!.adopt(agent); flushSync(); await vi.advanceTimersByTimeAsync(400); await settle();
+    expect(store!.preset.gen.quality).toBe("1080p");
+    expect(writes).toEqual([]); // adopting is not a new UI edit
+  });
+  it("keeps unsaved UI edits instead of adopting an outside change", async () => {
+    make(); edit("1080p");
+    const agent = fixture().preset; agent.gen.aspectRatio = "9:16";
+    store!.adopt(agent); flushSync();
+    expect(store!.preset.gen.quality).toBe("1080p");
+    expect(store!.preset.gen.aspectRatio).toBe("16:9");
+  });
   it("flush writes an edit made while the first write is pending", async () => {
     const gate = deferred(); const original = boundary.invoke.getMockImplementation()!; let calls = 0;
     boundary.invoke.mockImplementation(async (type: string, args: any) => { if (type === "set_preset" && ++calls === 1) await gate.promise; return original(type, args); });

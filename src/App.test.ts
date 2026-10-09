@@ -178,3 +178,31 @@ describe("Trình duyệt Vids kèm theo", () => {
     expect(boundary.invoke.mock.calls.map((c) => c[0])).toContain("open_vids_browser");
   });
 });
+
+describe("Agents (MCP)", () => {
+  it("draws text overlays when an agent exports, then reports back", async () => {
+    await mountApp();
+    boundary.listeners.get("render-overlays")!({ payload: { requestId: 42, stts: [1] } }); await settle();
+    expect(boundary.render).toHaveBeenCalledWith(expect.objectContaining({ fontSize: 50 }), "", 1280, 720);
+    expect(boundary.invoke).toHaveBeenCalledWith("save_overlays", expect.anything());
+    expect(boundary.invoke).toHaveBeenCalledWith("overlays_rendered", { requestId: 42, error: null });
+  });
+  it("shows a setting an agent changed", async () => {
+    await mountApp();
+    const changed = structuredClone(active); changed.preset.gen.quality = "1080p"; active = changed;
+    boundary.listeners.get("project")!({ payload: structuredClone(changed) }); await settle();
+    const select = [...target.querySelectorAll("select")].find((s) => [...s.options].some((o) => o.value === "1080p"))!;
+    expect(select.value).toBe("1080p");
+  });
+  it("shows how to connect an agent", async () => {
+    const original = boundary.invoke.getMockImplementation()!;
+    boundary.invoke.mockImplementation(async (type: string, args: any) => type === "mcp_info"
+      ? { command: "C:/App/1click.exe", args: ["--mcp"], claudeCode: 'claude mcp add oneclick -- "C:/App/1click.exe" --mcp', claudeDesktop: "{}", codex: "[mcp_servers.oneclick]" }
+      : original(type, args));
+    await mountApp();
+    target.querySelector<HTMLButtonElement>("button.conn")!.click(); await settle();
+    button("Kết nối agent (MCP)").click(); await settle();
+    expect(target.textContent).toContain('claude mcp add oneclick -- "C:/App/1click.exe" --mcp');
+    expect(target.textContent).toContain("[mcp_servers.oneclick]");
+  });
+});
