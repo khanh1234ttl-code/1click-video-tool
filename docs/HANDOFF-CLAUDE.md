@@ -4,6 +4,22 @@ Ngày 08/10/2026. Người dùng yêu cầu commit và viết kế hoạch để
 
 Đọc `AGENTS.md`, `docs/HANDOFF-CODEX.md`, file này, rồi `docs/superpowers/plans/2026-10-08-claude-code-finish-video-tool.md`. Review toàn nhánh được lưu trong git tại `docs/reviews/2026-10-08-whole-branch-review.md`.
 
+## Cập nhật 09/10/2026 (2): ẩn Chrome, hướng dẫn, Excel mẫu
+
+- **Hướng dẫn**: `docs/guide/huong-dan.html`, nguồn ở `huong-dan.src.html` (ảnh nhúng từ screenshots). Đã publish dạng artifact riêng tư.
+- **Excel mẫu**: `samples/` gồm theo tên ảnh (xlsx, csv) và theo thứ tự (xlsx). Test `shipped_samples_import_as_documented` giữ mẫu luôn khớp tool.
+- **Ẩn Chrome**: spec `docs/superpowers/specs/2026-10-09-hide-chrome-design.md`, plan `docs/superpowers/plans/2026-10-09-hide-chrome.md`.
+  - Bridge (extension) chạy Vids trong cửa sổ riêng và gửi `window.info`. Backup trước khi sửa: `../Vids_Automation_1ClickStudio_v1.1.10.0_backup_20261009_074904`.
+  - Tool khớp cửa sổ theo bounds × DPI rồi `ShowWindow`. Tự hiện lại khi job bị từ chối và khi thoát tool.
+  - Nút **Ẩn/Hiện Chrome** trên header, setting `hideChrome`.
+  - Chạy thật 5 luồng với cửa sổ ẩn, không bật Chạy nền: **5/5 Done**. Xem `docs/reviews/2026-10-09-hide-chrome-live.md`.
+- Bộ cài: **3,135,521 bytes**, SHA256 `B1B1932FC928B9BDE91D03BACBF591BE49C50A2B7D8DCBD96DB254A58F27903D` (code `4e806b7`).
+- Kiểm tra:
+  - `cargo test`: unit 108, e2e 3, media 3;
+  - `npm test`: 57;
+  - `test:ext`: 15;
+  - tsc đạt.
+
 ## Cập nhật 09/10/2026: giao diện 2 bước
 
 Theo yêu cầu người dùng:
