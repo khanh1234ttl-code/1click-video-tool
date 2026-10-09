@@ -81,27 +81,35 @@ dl.faq dd { margin: 4px 0 0; color: var(--fg); max-width: 68ch; }
   <p class="lead">Tool gửi ảnh và prompt cho extension Vids Automation để tạo video Veo trên Google Vids, tải video về máy, rồi chèn chữ và nhạc nền cho từng video. Mọi thứ đi theo hai bước: <b class="ui">1. Tạo video</b> rồi <b class="ui">2. Hậu kỳ</b>.</p>
 </header>
 
-<h2 id="chuan-bi">Chuẩn bị (làm một lần)</h2>
+<h2 id="chuan-bi">Cài đặt lần đầu</h2>
+<p>Bộ cài đã kèm sẵn mọi thứ: <b>trình duyệt Vids</b> (Chromium có gắn sẵn extension Vids Automation) và <b>FFmpeg</b>. Máy không cần cài Chrome, extension hay FFmpeg riêng.</p>
 <ol class="steps">
-  <li>Mở Chrome, đăng nhập tài khoản Google dùng được Google Vids.</li>
-  <li>Cài extension <b>Vids Automation – 1 Click Studio</b> bản <code>1.1.10.0</code> trở lên. Sau mỗi lần cập nhật extension: mở <code>chrome://extensions</code>, tìm extension và bấm nút tải lại ↻.</li>
-  <li>Cài FFmpeg (có cả <code>ffmpeg.exe</code> và <code>ffprobe.exe</code>). Nếu tool báo <b class="ui">Thiếu FFmpeg</b> trên đầu cửa sổ, bấm vào đó và chọn thư mục chứa hai file này.</li>
-  <li>Cài tool bằng file <code>1Click Video Tool_0.1.0_x64-setup.exe</code> rồi mở tool. Đèn <b class="ui">● Extension v1.1.10.0</b> màu xanh ở góc phải là đã kết nối.</li>
+  <li>Chạy <code>1Click Video Tool_0.1.0_x64-setup.exe</code> (khoảng 200 MB) rồi mở tool.</li>
+  <li>Sau vài giây tool tự mở <b>trình duyệt Vids</b>: một cửa sổ Chromium riêng, extension đã gắn sẵn, mở trang Google Vids.</li>
+  <li><b>Đăng nhập tài khoản Google</b> trong cửa sổ đó. Chỉ cần một lần, lần sau trình duyệt nhớ đăng nhập.</li>
+  <li>Đèn <b class="ui">● Extension v1.1.10.0</b> màu xanh ở góc phải tool là đã kết nối. Cần mở lại trình duyệt thì bấm đèn đó → <b class="ui">Mở trình duyệt Vids</b>.</li>
 </ol>
-<div class="note info">Tool và Chrome phải cùng mở trong lúc tạo video. Tab Google Vids có thể để ẩn phía sau, không cần nhìn vào.</div>
+<div class="note info">Tool và trình duyệt Vids phải cùng mở trong lúc tạo video. Cửa sổ trình duyệt có thể để phía sau, hoặc bấm <b class="ui">Ẩn Chrome</b> để ẩn hẳn.</div>
 
 <h2 id="buoc-1">Bước 1 · Tạo video</h2>
 <figure>
-  <img alt="Màn hình bước 1: thanh công cụ, hàng cài đặt và bảng ảnh với prompt" src="data:image/jpeg;base64,{{step1}}">
-  <figcaption>Bước 1: mỗi ảnh là một dòng, prompt sửa thẳng trong bảng.</figcaption>
+  <img alt="Màn hình bước 1: mỗi dòng là một prompt với các ảnh tham chiếu của nó" src="data:image/jpeg;base64,{{step1}}">
+  <figcaption>Bước 1: mỗi dòng là một prompt; ở đây 3 prompt dùng chung 2 ảnh tham chiếu.</figcaption>
 </figure>
 <ol class="steps">
-  <li>Bấm <b class="ui">Chọn folder ảnh</b>. Ảnh (jpg, png, webp) được xếp theo tên tự nhiên: 1, 2, 10. Thứ tự này là STT của video và cũng là thứ tự dùng khi làm hàng loạt.</li>
+  <li>Bấm <b class="ui">Chọn folder ảnh</b>. Folder này là <b>kho ảnh</b>; mặc định mỗi ảnh (jpg, png, webp) thành một dòng, xếp theo tên tự nhiên 1, 2, 10.</li>
+  <li><b>Mỗi dòng là một prompt</b> và dùng được nhiều ảnh:
+    <ul>
+      <li>bấm ô <b>Ảnh</b> của một dòng để chọn ảnh cho riêng dòng đó (số trên ảnh là thứ tự dùng);</li>
+      <li><b class="ui">Gán ảnh…</b>: chọn nhiều ảnh rồi bấm <b class="ui">Cho mọi dòng</b> (ví dụ 2 ảnh tham chiếu cho 10 prompt), <b class="ui">Cho dòng đã tick</b>, <b class="ui">Xoay vòng</b> (mỗi dòng 1 ảnh lần lượt) hoặc <b class="ui">Tạo 1 dòng cho mỗi ảnh</b>;</li>
+      <li><b class="ui">Thêm dòng</b> và <b class="ui">Xoá dòng đã tick</b>. Số STT của các dòng còn lại giữ nguyên.</li>
+    </ul>
+    Chế độ <b>ảnh làm khung đầu</b> cần đúng 1 ảnh mỗi dòng; chế độ <b>ảnh tham chiếu</b> dùng 1–10 ảnh mỗi dòng. Thiếu hoặc thừa thì tool báo dòng nào cần sửa trước khi gửi.</li>
   <li>Nhập prompt bằng một trong các cách:
     <ul>
       <li>gõ thẳng vào ô prompt của từng dòng;</li>
       <li><b class="ui">Prompt chung</b> ở ô dài phía trên, dùng cho mọi dòng chưa có prompt riêng;</li>
-      <li><b class="ui">Dán nhiều prompt</b>: mỗi dòng một prompt, điền lần lượt từ dòng đang chọn;</li>
+      <li><b class="ui">Dán nhiều prompt</b>: mỗi dòng một prompt, điền lần lượt từ dòng đang chọn; dán nhiều hơn số dòng thì tool tự thêm dòng;</li>
       <li><b class="ui">Nhập Excel/CSV</b>, xem <a href="#excel">file mẫu</a>.</li>
     </ul>
   </li>
@@ -151,11 +159,13 @@ dl.faq dd { margin: 4px 0 0; color: var(--fg); max-width: 68ch; }
 </table></div>
 
 <h2 id="excel">File Excel mẫu</h2>
-<p>Có ba file mẫu trong thư mục <code>samples</code> của tool:</p>
+<p><b>Mỗi dòng dữ liệu là một prompt, theo thứ tự</b>: dòng 2 trong Excel là prompt 1, dòng 3 là prompt 2… Thiếu dòng trong tool thì tool tự thêm. Cột <code>anh</code> ghi tên ảnh trong kho; nhiều ảnh thì cách nhau bằng dấu <code>;</code>.</p>
+<p>Các file mẫu trong thư mục <code>samples</code> của tool:</p>
 <ul>
-  <li><code>mau-nhap-theo-ten-anh.xlsx</code>: khớp theo tên file ảnh, thứ tự dòng không quan trọng.</li>
-  <li><code>mau-nhap-theo-thu-tu.xlsx</code>: không có cột <code>anh</code>, dòng 1 là video 1, dòng 2 là video 2…</li>
-  <li><code>mau-nhap-theo-ten-anh.csv</code>: giống bản Excel theo tên, lưu dạng CSV UTF-8.</li>
+  <li><code>mau-nhap-theo-ten-anh.xlsx</code>: mỗi prompt một ảnh.</li>
+  <li><code>mau-nhieu-anh.xlsx</code>: 2 ảnh tham chiếu dùng chung cho nhiều prompt (<code>nhan-vat.png; boi-canh.png</code>).</li>
+  <li><code>mau-nhap-theo-thu-tu.xlsx</code>: chỉ prompt, text, nhạc; giữ nguyên ảnh đang có.</li>
+  <li><code>mau-nhap-theo-ten-anh.csv</code>: bản CSV UTF-8.</li>
 </ul>
 <div class="tablewrap"><table class="sheet" aria-label="Ví dụ sheet nhập theo tên ảnh">
   <thead><tr><th class="rn"></th><th>A</th><th>B</th><th>C</th><th>D</th></tr></thead>
@@ -163,13 +173,13 @@ dl.faq dd { margin: 4px 0 0; color: var(--fg); max-width: 68ch; }
     <tr><td class="rn">1</td><td class="hd">anh</td><td class="hd">prompt</td><td class="hd">text</td><td class="hd">nhac</td></tr>
     <tr><td class="rn">2</td><td>01_thuyen-buom.png</td><td>the sailboat drifts gently on the waves at sunset</td><td>Tập 1</td><td>nhac-1.mp3</td></tr>
     <tr><td class="rn">3</td><td>02_bai-bien.png</td><td>palm leaves sway in the breeze</td><td>Tập 2</td><td></td></tr>
-    <tr><td class="rn">4</td><td>03_dieu-giay.png</td><td>the red kite flutters in the wind</td><td>Tập 3</td><td>nhac-2.mp3</td></tr>
+    <tr><td class="rn">4</td><td>03_dieu-giay.png; 02_bai-bien.png</td><td>the red kite flies over the beach</td><td>Tập 3</td><td>nhac-2.mp3</td></tr>
   </tbody>
 </table></div>
 <div class="tablewrap"><table>
   <thead><tr><th>Cột</th><th>Ý nghĩa</th><th>Ô trống thì sao</th></tr></thead>
   <tbody>
-    <tr><td><code>anh</code></td><td>Tên file ảnh, có hoặc không có đuôi, không phân biệt hoa thường. Bỏ hẳn cột này để khớp theo thứ tự.</td><td>Dòng bị bỏ qua (khi khớp theo tên).</td></tr>
+    <tr><td><code>anh</code></td><td>Tên ảnh trong folder ảnh, có hoặc không có đuôi, không phân biệt hoa thường. Nhiều ảnh cách nhau bằng <code>;</code>.</td><td>Giữ ảnh đang có của prompt đó.</td></tr>
     <tr><td><code>prompt</code></td><td>Mô tả chuyển động/cảnh cho Veo. Nên viết tiếng Anh.</td><td>Dùng Prompt chung.</td></tr>
     <tr><td><code>text</code></td><td>Chữ hiện trên video ở bước 2.</td><td>Giữ text đang có.</td></tr>
     <tr><td><code>nhac</code></td><td>Tên file nhạc trong folder nhạc đã chọn.</td><td>Nhạc theo chế độ chung.</td></tr>

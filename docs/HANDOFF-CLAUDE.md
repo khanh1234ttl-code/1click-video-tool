@@ -4,6 +4,25 @@ Ngày 08/10/2026. Người dùng yêu cầu commit và viết kế hoạch để
 
 Đọc `AGENTS.md`, `docs/HANDOFF-CODEX.md`, file này, rồi `docs/superpowers/plans/2026-10-08-claude-code-finish-video-tool.md`. Review toàn nhánh được lưu trong git tại `docs/reviews/2026-10-08-whole-branch-review.md`.
 
+## Cập nhật 09/10/2026 (3): bản cài cho máy khách, nhiều ảnh cho mỗi prompt
+
+- **Bộ cài kèm Chromium 154, extension và FFmpeg 8.1**, nặng 198.2 MB, SHA256 `1A82BD90…6B4F`, code `0ce545e`.
+  - Lệnh build: `python scripts/fetch-vendor.py` rồi `cargo tauri build --config src-tauri/tauri.bundle.conf.json`. `src-tauri/vendor/` và `vendor-dl/` được git-ignore.
+  - Tool tự mở trình duyệt Vids (profile `%APPDATA%ClickVideoTool\chromium-profile`) nếu sau 8 s chưa có extension kết nối. Mở bằng tay: đèn Extension → Mở trình duyệt Vids.
+- **Mỗi dòng là 1 prompt, 0–10 ảnh**:
+  - `Row.images`; project cũ có `imagePath` vẫn mở được;
+  - `add_rows`, `delete_rows`, `assign_images` (all / roundRobin / onePerImage);
+  - Excel theo thứ tự, cột `anh` ghi nhiều ảnh cách nhau bằng `;`;
+  - kiểm tra số ảnh theo chế độ khi bắt đầu;
+  - ảnh dùng chung chỉ upload một lần (`imageIds`). Bridge đã cập nhật, backup `..._backup_20261009_092034`.
+- Chạy thật: 3 prompt × 2 ảnh tham chiếu trong Chromium kèm theo cho **3/3 Done**, video kết hợp đúng cả 2 ảnh. Xem `docs/reviews/2026-10-09-customer-ready-live.md`.
+- Kiểm tra:
+  - `cargo test`: unit 118, e2e 3, media 3;
+  - `npm test`: 62;
+  - `test:ext`: 16;
+  - tsc đạt.
+- Máy dev này hiện **tin extension của Chromium kèm theo** (`hikmcgob…`). Muốn dùng lại Chrome cũ thì bấm "Quên extension".
+
 ## Cập nhật 09/10/2026 (2): ẩn Chrome, hướng dẫn, Excel mẫu
 
 - **Hướng dẫn**: `docs/guide/huong-dan.html`, nguồn ở `huong-dan.src.html` (ảnh nhúng từ screenshots). Đã publish dạng artifact riêng tư.
