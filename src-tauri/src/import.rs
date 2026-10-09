@@ -323,4 +323,20 @@ mod tests {
         let err = records_from_grid(vec![vec!["ghi chú".to_string()], vec!["x".into()]]).unwrap_err();
         assert!(err.to_string().contains("ít nhất một cột prompt, text hoặc nhac"), "{err}");
     }
+
+    #[test]
+    fn shipped_samples_import_as_documented() {
+        let samples = Path::new(env!("CARGO_MANIFEST_DIR")).join("../samples");
+        let by_name = parse_table(&samples.join("mau-nhap-theo-ten-anh.xlsx")).unwrap();
+        assert_eq!(by_name.len(), 3);
+        assert_eq!(by_name[0], TableRecord { image: "01_thuyen-buom.png".into(), prompt: Some("the sailboat drifts gently on the waves at sunset, water sparkles".into()), text: Some("Tập 1".into()), music: Some("nhac-1.mp3".into()) });
+        assert_eq!(by_name[1].music, None, "blank music cell stays blank");
+        assert_eq!(parse_table(&samples.join("mau-nhap-theo-ten-anh.csv")).unwrap(), by_name);
+        let by_order = parse_table(&samples.join("mau-nhap-theo-thu-tu.xlsx")).unwrap();
+        assert_eq!(by_order.len(), 3);
+        assert!(by_order.iter().all(|r| r.image.is_empty()), "no anh column: matched by order");
+        let mut rows = rows_from_images(vec!["a.png".into(), "b.png".into(), "c.png".into()]);
+        assert!(apply_table(&mut rows, &by_order, None).is_empty());
+        assert_eq!(rows.iter().map(|r| r.text.as_str()).collect::<Vec<_>>(), ["Tập 1", "Tập 2", "Tập 3"]);
+    }
 }
