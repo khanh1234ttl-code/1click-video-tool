@@ -75,6 +75,7 @@ async function setup(t, opts) {
   const context = vm.createContext({
     chrome, console,
     __ONECLICK_TOOL_URL__: `ws://127.0.0.1:${wss.address().port}`,
+    __ONECLICK_DOWNLOAD_GRACE_MS__: opts?.downloadGraceMs ?? 60000,
     WebSocket: class extends WebSocket {
       constructor(url) { super(url); clients.add(this); }
     },
@@ -356,4 +357,56 @@ test("minimizes and restores the Vids window on request (macOS hiding)", async (
   ws.send(JSON.stringify({ type: "window.state", state: "fullscreen" })); // not allowed: ignored
   await new Promise((r) => setTimeout(r, 100));
   assert.deepEqual(chrome.__created, [{ update: 1, state: "minimized" }, { update: 1, state: "normal" }]);
+});
+
+// The content script reports a prompt as successful even when fetching or saving its video
+// failed (it only logs a warning), so no download ever arrives for it.
+const reportDone = (listeners, index) => listeners.runtime.forEach((f) => f({ type: "PROMPT_GROUP_STATUS", data: { id: "j1", status: "running", results: [
+  { promptIndex: index, success: true, downloadComplete: true },
+] } }, {}, () => {}));
+
+test("a prompt reported done whose video never downloads fails with the extension's warning", async (t) => {
+  const { ws, next, listeners } = await setup(t, { downloadGraceMs: 150 });
+  await next("hello");
+  putImages(ws);
+  ws.send(JSON.stringify(submit));
+  await next("job.accepted");
+  listeners.runtime.forEach((f) => f({ type: "ACTION_LOG", data: { level: "warn", message: "⚠️ Video download failed: Failed to fetch" } }, {}, () => {}));
+  listeners.runtime.forEach((f) => f({ type: "ACTION_LOG", data: { level: "info", message: "⏳ Attempt 3 - Resource is generating (40%)..." } }, {}, () => {}));
+  reportDone(listeners, 1);
+  const failed = await next("item.failed", 2000);
+  assert.equal(failed.index, 1);
+  assert.match(failed.error, /không tải về được/);
+  assert.match(failed.error, /Video download failed: Failed to fetch/);
+  ws.send(JSON.stringify({ type: "job.query", jobId: "j1" }));
+  assert.deepEqual((await next("job.status")).pending, [2]);
+});
+
+test("a prompt reported done before its download completes is not failed", async (t) => {
+  const { ws, next, listeners, chrome, inbox } = await setup(t, { downloadGraceMs: 150 });
+  await next("hello");
+  putImages(ws);
+  ws.send(JSON.stringify(submit));
+  await next("job.accepted");
+  reportDone(listeners, 2);
+  chrome.__files[5] = "E:/x/1ClickBridge/j1/002_cho_a.mp4";
+  await Promise.all(listeners.downloads.map((f) => f({ id: 5, state: { current: "complete" } })));
+  await next("item.downloaded");
+  await new Promise((r) => setTimeout(r, 300));
+  assert.equal(inbox.filter((m) => m.type === "item.failed").length, 0);
+});
+
+test("a prompt whose download hangs after the completed signal also fails", async (t) => {
+  const { ws, next, listeners } = await setup(t, { downloadGraceMs: 150 });
+  await next("hello");
+  putImages(ws);
+  ws.send(JSON.stringify(submit));
+  await next("job.accepted");
+  listeners.runtime.forEach((f) => f({ type: "VIDEO_GENERATION_PROGRESS", data: { groupId: "j1", promptIndex: 2, percentage: 100, status: "generating" } }, {}, () => {}));
+  await new Promise((r) => setTimeout(r, 300));
+  ws.send(JSON.stringify({ type: "job.query", jobId: "j1" }));
+  assert.deepEqual((await next("job.status")).pending, [1, 2], "a progress bar at 100% is still generating");
+  listeners.runtime.forEach((f) => f({ type: "VIDEO_GENERATION_PROGRESS", data: { groupId: "j1", promptIndex: 2, percentage: 100, status: "completed" } }, {}, () => {}));
+  const failed = await next("item.failed", 2000);
+  assert.equal(failed.index, 2);
 });

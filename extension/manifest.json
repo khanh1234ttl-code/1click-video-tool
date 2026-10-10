@@ -5,8 +5,8 @@
   },
   "name": "Vids Automation - 1 Click Studio",
   "description": "Auto VEO & Voice your prompts at scale. Batch generate and auto-download videos and images on docs.google.com/videos.",
-  "version": "1.1.10.0",
-  "version_name": "1.1.10.0 - bridge cho 1Click Video Tool",
+  "version": "1.1.10.1",
+  "version_name": "1.1.10.1 - bridge cho 1Click Video Tool",
   "manifest_version": 3,
   "action": {
     "default_title": "Vids Automation - 1 Click Studio",

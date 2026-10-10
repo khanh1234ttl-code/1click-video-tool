@@ -84,3 +84,12 @@ v1.1.10.0 - Bridge cho 1Click Video Tool
 
 === 2026-10-09 (Claude Code) ===
 oneclick-bridge.js: chạy Google Vids trong cửa sổ riêng (tách tab nếu đang chung cửa sổ, không tải lại trang) và gửi window.info {windowId,left,top,width,height} cho tool sau ensureVidsTab, khi tool hỏi window.query và khi cửa sổ đổi vị trí. Không đổi luồng tạo video. Backup: Vids_Automation_1ClickStudio_v1.1.10.0_backup_20261009_074904. Kiểm chứng: 5/5 video khi cửa sổ bị tool ẩn hẳn.
+
+=== v1.1.10.1 (2026-10-10) - bridge: video xong nhưng không tải về ===
+Triệu chứng: tool đứng ở 'Render 100%' mãi, trong khi video đã tạo xong trên Vids (gặp ở 1080p).
+Nguyên nhân: content script báo prompt thành công (success:true, downloadComplete:true) cả khi
+tải/lưu video lỗi (chỉ ghi cảnh báo), nên không có download nào và bridge chờ mãi.
+Sửa (chỉ oneclick-bridge.js, không đổi luồng tạo video): khi prompt báo 'completed' hoặc kết quả
+thành công, bridge chờ file tải về tối đa 3 phút; quá hạn thì báo item.failed kèm cảnh báo tải
+video gần nhất từ ACTION_LOG. Kiểm tra lại mỗi lần alarm 30 giây.
+Manifest: version 1.1.10.1.

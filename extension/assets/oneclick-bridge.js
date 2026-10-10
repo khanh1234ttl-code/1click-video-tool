@@ -5,6 +5,12 @@ const VIDS_MATCH = "*://docs.google.com/videos/*";
 const CREATE_URL = "https://docs.google.com/videos/create";
 const FOLDER_ROOT = "1ClickBridge";
 const FILE_RE = /[\\/]1ClickBridge[\\/]([^\\/]+)[\\/](\d{3})_/;
+// The content script reports a prompt as successful even when fetching or saving its video
+// failed (it only logs a warning), and a stalled fetch never reports at all. A prompt reported
+// completed must produce its download within this time, or it fails so the desktop tool does
+// not wait for it forever.
+const DOWNLOAD_GRACE_MS = globalThis.__ONECLICK_DOWNLOAD_GRACE_MS__ || 180000;
+let lastDownloadWarning = "";
 
 let ws = null;
 let reconnectTimer = null;
@@ -188,11 +194,37 @@ function setItem(jobId, index, patch) {
   return true;
 }
 
+/** A prompt the content script reports as done starts its download grace period. */
+function expectDownload(jobId, index) {
+  const item = jobs[jobId] && jobs[jobId].items[index];
+  if (!item || item.state !== "pending" || item.reportedDoneAt) return;
+  item.reportedDoneAt = Date.now();
+  saveJobs();
+  setTimeout(() => expireDownloads(), DOWNLOAD_GRACE_MS + 50);
+}
+
+function expireDownloads() {
+  const now = Date.now();
+  for (const [jobId, job] of Object.entries(jobs)) {
+    for (const [i, item] of Object.entries(job.items)) {
+      if (item.state !== "pending" || !item.reportedDoneAt || now - item.reportedDoneAt < DOWNLOAD_GRACE_MS) continue;
+      const why = lastDownloadWarning ? ` (${lastDownloadWarning})` : "";
+      const error = `Video đã tạo xong trên Vids nhưng extension không tải về được${why}. Bấm Thử lại để tạo lại.`;
+      if (setItem(jobId, Number(i), { state: "failed", error })) send({ type: "item.failed", jobId, index: Number(i), error });
+    }
+  }
+}
+
 function handleRuntimeMessage(m) {
   if (!m || !m.data) return false;
-  if (m.type === "VIDEO_GENERATION_PROGRESS") {
-    const { groupId, promptIndex, percentage } = m.data;
+  if (m.type === "ACTION_LOG") {
+    const { level, message } = m.data;
+    if (level !== "info" && /download|tải/i.test(message || "")) lastDownloadWarning = String(message).slice(0, 200);
+  } else if (m.type === "VIDEO_GENERATION_PROGRESS") {
+    const { groupId, promptIndex, percentage, status } = m.data;
     if (jobs[groupId]) send({ type: "item.progress", jobId: groupId, index: promptIndex, percent: Math.round(percentage || 0) });
+    // "completed" is sent right before the content script fetches and saves the video.
+    if (status === "completed") expectDownload(groupId, promptIndex);
   } else if (m.type === "PROMPT_GROUP_STATUS") {
     const jobId = m.data.id;
     // The content script records a final generation failure as success:false with
@@ -201,6 +233,8 @@ function handleRuntimeMessage(m) {
       const error = r.error || "Tạo video lỗi";
       if (!r.success && setItem(jobId, r.promptIndex, { state: "failed", error })) {
         send({ type: "item.failed", jobId, index: r.promptIndex, error });
+      } else if (r.success && r.downloadComplete) {
+        expectDownload(jobId, r.promptIndex);
       }
     }
     // A group-level error (e.g. config not loaded) leaves no per-item results.
@@ -242,6 +276,10 @@ chrome.windows.onBoundsChanged.addListener((w) => {
 
 // Retry every five seconds while awake; the alarm also wakes an idle service worker.
 chrome.alarms.create("oneclick-bridge", { periodInMinutes: 0.5 });
-chrome.alarms.onAlarm.addListener((a) => a.name === "oneclick-bridge" && connect());
+chrome.alarms.onAlarm.addListener((a) => {
+  if (a.name !== "oneclick-bridge") return;
+  connect();
+  jobsReady.then(expireDownloads);
+});
 
 jobsReady.finally(connect);
