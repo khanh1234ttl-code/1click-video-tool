@@ -1,0 +1,86 @@
+Vids Automation - 1 Click Studio v1.1.9.8
+
+Cập nhật theo yêu cầu:
+1. Gỡ bỏ hoàn toàn Auth / Plan / API:
+   - Gỡ bỏ toàn bộ việc kiểm tra session hay gọi API tới /api/auth/login và /api/auth/plan.
+   - Luôn kích hoạt Pro/Max vĩnh viễn (isPro = true, isLoggedIn = true).
+   - Xóa bỏ giới hạn 10 prompt/ngày (limit = 999999, isExceeded = false).
+   - Nút Upgrade / Nâng cấp lên Max mở trực tiếp https://1clickvn.com/workshop/ mà không bắt đăng nhập tài khoản.
+
+2. Khôi phục phần chèn ủng hộ (Support & Donate) của 1 Click Studio:
+   - Khôi phục assets/support-donate.js:
+     + Nút "Ủng hộ" trên thanh tiêu đề header (mở popup quét mã QR).
+     + Card "Hỗ trợ & Ủng hộ" ở cuối side-panel với các liên kết Zalo, Facebook, Website và mã QR chuyển khoản MB Bank (STK: 09996618888, NGUYỄN MINH KHÁNH có nút Copy tiện lợi).
+   - Nạp lại script support-donate.js trong src/ui/side-panel/index.html.
+   - Giữ lại thông tin tác giả "1 Click Studio" và liên kết https://1clickvn.com/workshop/.
+
+3. Mở khóa chạy 10 luồng song song (Concurrent Prompts):
+   - Mở rộng danh sách tùy chọn "Prompt đồng thời" trong tab Settings (Cài đặt) từ 1 luồng lên tới 10 luồng (1, 2, 3, 4, 5, 6, 7, 8, 9, 10).
+   - Sửa vòng lặp gửi luồng trong assets/index.ts-DUXzPPUe.js (thay thế giới hạn r < 1 thành số luồng cấu hình Math.min(10, concurrentPrompts)), cho phép chạy tối đa 10 tiến trình tạo song song thực tế.
+
+4. Sửa triệt để lỗi không click gửi prompt được (Send Button Click Fix):
+   - Bổ sung bộ selector toàn diện cho nút Generate / Tạo / Submit / Create trên Google Vids SPA (hỗ trợ cả button lẫn [role="button"], aria-label đa ngôn ngữ).
+   - Sửa hàm kiểm tra phần tử m(e) trong assets/index.ts-DUXzPPUe.js: không còn bị lỗi timeout/đánh giá sai khi nút nằm ngoài khung nhìn cuộn hiện tại.
+   - Thêm cơ chế tự động scrollIntoView({ block: "center" }) vào giữa màn hình trước khi click.
+   - Kích hoạt sự kiện input/change lên ô nhập prompt trước khi click để Google Vids nhận diện văn bản và kích hoạt nút gửi (loại bỏ trạng thái aria-disabled="true").
+   - Gửi chuỗi sự kiện click đầy đủ: PointerEvent (pointerdown/pointerup), MouseEvent (mousedown/mouseup/click), element.click() và Chrome Debugger mouse click (CC) chuẩn vào tâm nút (x, y).
+   - Có cơ chế fallback tự động thử lại các selector dự phòng và phím Enter nếu nút chưa nhận lệnh.
+
+==================================================================
+v1.1.9.9 - Sửa Concurrent Prompts + chạy nền (đã kiểm thử trên Google Vids thật)
+
+LỖI GỐC (bản 1.1.9.8) - đã tái hiện trên Vids thật / bản giả lập giống thật:
+  - 10 worker cùng gõ vào MỘT ô prompt -> prompt bị ghi đè/ghép, nhiều prompt không được gửi.
+  - Mỗi lần click bấm 3 lần (dispatch + el.click() + debugger). Vids KHÔNG xoá prompt sau khi
+    bấm Tạo -> 1 prompt sinh 2-3 video (giả lập: 4 prompt -> 8 lần tạo).
+  - Tải về dùng selector chung "latest" -> mọi file đều là cùng 1 video (thường là video cũ).
+  - Click qua debugger dùng toạ độ CSS trong khi trang bị zoom 50-80% -> click lệch, bấm nhầm.
+  - Nút gửi: selector rộng (aria-label "Tạo"/"Create") khớp nút ẩn "Tạo video ngang" của hộp
+    thoại chào mừng và các nút khác; jQuery trả theo thứ tự DOM nên chọn nhầm.
+  - Kiểm tra "đã mở rộng ô prompt" bằng sự tồn tại phần tử (bản ẩn vẫn còn trong DOM).
+  - Vids mở lại bảng Video AI khi tải trang nhưng aria-pressed vẫn "false" -> extension bấm
+    vào làm ĐÓNG bảng.
+  - Selector "đang tạo" (loadingOutputElement) không còn khớp giao diện Vids hiện tại.
+  - Nối tiếp video (concat): lấy khung cuối từ <video> khác nguồn -> canvas bị chặn -> âm thầm
+    bỏ qua, video sau thành text-to-video.
+  - Tab bị ẩn/thu nhỏ: lệnh debugger báo thành công nhưng không có tác dụng; timer bị Chrome
+    hãm (tới 1 lần/phút) -> bước cấu hình mất >2 phút.
+
+SỬA (assets/index.ts-DUXzPPUe.js - đã format lại cho dễ đọc):
+  1. 1 luồng gửi prompt; "Prompt đồng thời" = số video render song song (tối đa 10).
+  2. Mỗi prompt gắn với ô kết quả của nó: Vids xếp cũ->mới và thay ô "đang tạo" bằng ô "đã
+     xong" ở CÙNG VỊ TRÍ -> gắn theo vị trí, đối chiếu chữ prompt trên video
+     (aria-label "Video được tạo: ..."), chống tải trùng bằng data-generation-id.
+     Không xác định được ô -> chạy tuần tự (chậm hơn nhưng không sai).
+  3. Thao tác bằng DOM (click giả lập + execCommand) - đã kiểm chứng trên Vids thật cho mọi
+     bước: đóng hộp thoại, mở bảng, mở rộng ô, chọn tab, menu cài đặt, chất lượng, gõ prompt,
+     @mention ảnh tham chiếu, tải ảnh, bấm Tạo. Chạy được khi tab ẩn. Mỗi lần chỉ 1 click.
+  4. Luôn chọn phần tử ĐANG HIỂN THỊ; nút Tạo dùng selector chính xác
+     collapsiblePromptBoxGenerateButton.
+  5. Đóng hộp thoại chào mừng có kiểm tra lại; mở bảng Video AI dựa trên ô prompt hiển thị;
+     menu cài đặt luôn được đóng kể cả khi lỗi.
+  6. Concat: lấy khung cuối từ blob video đã tải (cùng nguồn) - chạy cả khi tab ẩn.
+  7. Tab ẩn: chờ qua service worker (OC_SLEEP) thay vì timer của trang -> không bị hãm.
+
+Service worker (assets/index.ts-Bqt83c-l.js): pendingTargets không dồn tên cũ; tự gắn lại
+debugger sau khi service worker khởi động lại; thêm OC_SLEEP.
+remoteConfig: thêm selector Inprogressvideogeneration; sendVideoButton chính xác.
+
+KẾT QUẢ CHẠY THẬT (tab ẩn = chạy nền), 08/10/2026:
+  - Text->Video 2 prompt song song: đúng nội dung, đúng tên file, ~1 phút cho cả 2.
+  - Ảnh->Video (khung hình đầu): khung đầu khớp ảnh đầu vào.
+  - Ảnh tham chiếu (@mention): chèn đúng thẻ ảnh vào prompt, video có chủ thể tham chiếu.
+  - Nối tiếp video: khung cuối video 1 được đưa làm ảnh đầu video 2.
+  Chưa chạy thật: chế độ Ảnh (textToImage/imageToImage) và Giọng nói (textToVoice).
+
+==================================================================
+v1.1.10.0 - Bridge cho 1Click Video Tool
+  - Thêm assets/oneclick-bridge.js (service worker): kết nối ws://127.0.0.1:17890 tới tool,
+    nhận job (ảnh + prompt) và chạy qua đúng luồng AUTO_FILL_VIDS của side panel.
+  - Video tải vào 1ClickBridge/<jobId>/NNN_*.mp4 và được báo về tool kèm đường dẫn.
+  - Tự kết nối lại sau 5 giây; quyền alarms đánh thức service worker khi ngủ.
+  - Thêm host 127.0.0.1; side panel và luồng tạo video không đổi.
+
+
+=== 2026-10-09 (Claude Code) ===
+oneclick-bridge.js: chạy Google Vids trong cửa sổ riêng (tách tab nếu đang chung cửa sổ, không tải lại trang) và gửi window.info {windowId,left,top,width,height} cho tool sau ensureVidsTab, khi tool hỏi window.query và khi cửa sổ đổi vị trí. Không đổi luồng tạo video. Backup: Vids_Automation_1ClickStudio_v1.1.10.0_backup_20261009_074904. Kiểm chứng: 5/5 video khi cửa sổ bị tool ẩn hẳn.

@@ -160,7 +160,7 @@ Folder ngoài git: `../Vids_Automation_1ClickStudio_v1.1.9.6`.
 Backup trước sửa: `../Vids_Automation_1ClickStudio_v1.1.9.9_backup_20261008_201603`.
 Đã đối chiếu 28 file backup; chỉ loader/manifest/FIX_NOTES đổi, thêm bridge. Content script `assets/index.ts-DUXzPPUe.js` và worker asset cũ không đổi.
 
-Bridge trong git: `extension-bridge/assets/oneclick-bridge.js`, phải byte-identical bản cài; hướng dẫn `extension-bridge/README.md`. Task 12 scoped review đã chấp nhận cancellation/startup fixes; desktop vẫn cần stale-job filter.
+Extension đầy đủ trong git: `extension/` (bộ cài chép từ đây). Bản Chrome của chủ máy load từ folder `../Vids_Automation_1ClickStudio_v1.1.9.6/` ngoài repo: sửa extension thì sửa cả hai cho giống hệt (`diff -r`). Task 12 scoped review đã chấp nhận cancellation/startup fixes; desktop vẫn cần stale-job filter.
 
 Người dùng đã Reload và desktop nhận ID `bedjklgfehfcmlaldafbbdplgblpdpch`, version 1.1.10.0. **Bridge sửa thêm ở 3e27fa8 sau lần Reload đó: cần Reload thêm trước chạy thật.** Chỉ đề nghị khi core/test đã đạt.
 

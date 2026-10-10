@@ -20,7 +20,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 CACHE = ROOT / "vendor-dl"
 VENDOR = ROOT / "src-tauri" / "vendor"
-EXTENSION_SRC = ROOT.parent / "Vids_Automation_1ClickStudio_v1.1.9.6"
+EXTENSION_SRC = ROOT / "extension"
 SEVENZIP = os.environ.get("SEVENZIP", r"C:\Program Files\7-Zip\7z.exe")
 
 ARCHIVES = {
@@ -114,7 +114,7 @@ def extract(archive: Path, into: Path) -> None:
 
 
 def copy_extension() -> None:
-    shutil.copytree(EXTENSION_SRC, VENDOR / "extension", ignore=shutil.ignore_patterns("FIX_NOTES.txt", "*.bak"))
+    shutil.copytree(EXTENSION_SRC, VENDOR / "extension", ignore=shutil.ignore_patterns("FIX_NOTES.txt", "README.md", "*.bak"))
 
 
 def report() -> None:

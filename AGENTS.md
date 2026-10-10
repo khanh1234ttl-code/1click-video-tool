@@ -7,6 +7,7 @@ made, and environment facts. The plan and spec it points to are authoritative.
 - Branch `feat/video-tool`; commit locally after each task; never push or merge without the user.
 - Test before code (write the failing test, watch it fail, then implement).
 - Rust: `cd src-tauri && cargo test`; UI: `npm test && npm run build`; extension bridge: `npm run test:ext`.
+- The full extension is in `extension/` (the installer copies it). The owner's Chrome loads the copy in `../Vids_Automation_1ClickStudio_v1.1.9.6/`; keep both identical, back up before editing, never change the content-script generation flow.
 - User-facing text is Vietnamese.
 
 ## Latest status (2026-10-08)

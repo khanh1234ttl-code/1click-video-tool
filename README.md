@@ -14,7 +14,7 @@ Làm video hàng loạt trên Windows: folder ảnh + prompt → extension Vids 
 3. **Đăng nhập tài khoản Google** trong cửa sổ đó, chỉ cần một lần: profile được giữ cho các lần sau.
 4. Đèn **Extension** trên đầu cửa sổ tool chuyển xanh là xong. Có thể mở lại trình duyệt bất cứ lúc nào: bấm đèn **Extension** → **Mở trình duyệt Vids**.
 
-Máy đã có Chrome cài extension (bản có bridge) vẫn dùng được như cũ: extension kết nối trong vài giây nên tool không mở thêm trình duyệt. Hướng dẫn gắn bridge cho extension có sẵn: [extension-bridge/README.md](extension-bridge/README.md).
+Máy đã có Chrome cài extension (bản có bridge) vẫn dùng được như cũ: extension kết nối trong vài giây nên tool không mở thêm trình duyệt. Extension đầy đủ (có bridge) nằm trong [extension/](extension/README.md), cài vào Chrome bằng **Load unpacked**.
 
 ## Dùng
 
@@ -163,7 +163,7 @@ cd src-tauri
 cargo test
 ```
 
-Kiểm thử Rust về media cần FFmpeg/ffprobe trong PATH. `npm run test:ext` kiểm tra module bridge đã cài trong folder extension bên cạnh repo; xem [hướng dẫn bridge](extension-bridge/README.md) để chuẩn bị extension.
+Kiểm thử Rust về media cần FFmpeg/ffprobe trong PATH. `npm run test:ext` kiểm tra module bridge trong [extension/](extension/README.md).
 
 Đóng gói bản cho khách (kèm Chromium, FFmpeg và extension), từ thư mục repo:
 

@@ -7,7 +7,7 @@ import { readFile } from "node:fs/promises";
 import vm from "node:vm";
 import path from "node:path";
 
-const BRIDGE = path.resolve(import.meta.dirname, "../../Vids_Automation_1ClickStudio_v1.1.9.6/assets/oneclick-bridge.js");
+const BRIDGE = path.resolve(import.meta.dirname, "../extension/assets/oneclick-bridge.js");
 
 async function within(promise, milliseconds, message) {
   let timer;
